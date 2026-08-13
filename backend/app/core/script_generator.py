@@ -10,6 +10,9 @@ Skill 组合修正：
 
 from typing import Any, Dict, Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.agents.pipeline import ScriptGenerationPipeline
 from backend.app.core.llm import get_llm_client
 from backend.app.core.schemas import SCHEMAS, ReviewResult
 from backend.app.core.skill_manager import get_skill_manager
@@ -58,3 +61,22 @@ async def review_script(script: dict):
         script=script,
     )
     return await get_llm_client().call(prompt, schema=ReviewResult)
+
+
+async def generate_full_script(user_input: Dict[str, Any],
+                               session: AsyncSession,
+                               rag_manager=None) -> Dict[str, Any]:
+    """运行完整剧本生成 Pipeline 并落库，返回 final_script（含落库后的 id）。
+
+    Args:
+        user_input: 用户请求（title/category/scene/player_count/outline/
+                    characters/trick_preferences/is_custom）
+        session: 数据库会话（finalize 阶段经 ScriptRepo 落库 scripts 表）
+        rag_manager: 可选 RAG 检索器；不传则 Skill 跳过 RAG 注入
+    """
+    pipe = ScriptGenerationPipeline(
+        rag_manager=rag_manager,
+        session=session,
+    )
+    result = await pipe.run(user_input)
+    return result["final_script"]
