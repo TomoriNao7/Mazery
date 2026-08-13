@@ -1,0 +1,34 @@
+*.log
+/test_main.http
+/doc
+/backend/tests
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
+dist/
+dist-electron/
+release/
+
+# Database & OS
+*.db
+*.sqlite
+*.sqlite3
+.DS_Store
+Thumbs.db
