@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine,AsyncSession,async_sessio
 
 from sqlalchemy.orm import declarative_base
 
-from backend.app.config import DATABASE_URL
+from backend.app.config import DATABASE_URL, ensure_db_dir
 
 
 #ORM基类
@@ -30,6 +30,7 @@ AsyncSessionFactory=async_sessionmaker(
 
 #初始化数据库
 async def init_db() -> None:
+    ensure_db_dir()  # 建库时才创建数据目录
     async with engine.begin() as conn:
         # 开启 WAL 模式（提升并发读写性能）
         await conn.execute(text("PRAGMA journal_mode=WAL"))

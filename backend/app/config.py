@@ -1,16 +1,36 @@
 import os
+import sys
 from pathlib import Path
 
 # ---------- 端口 ----------
 PORT = 18920
 
 # ---------- 数据库路径 ----------
-# 获取 APPDATA 环境变量（Windows），若不存在则回退到用户主目录
-db_dir = Path('E:/DATABASE/mazery')
-db_dir.mkdir(parents=True, exist_ok=True)          # 自动创建目录
+# 默认按平台规范存放：
+#   Windows: %APPDATA%/Mazery | macOS: ~/Library/Application Support/Mazery
+#   Linux:   ~/.local/share/mazery
+# 个人开发机可用环境变量 MAZERY_DB_DIR 覆盖（如 setx MAZERY_DB_DIR "E:\DATABASE\mazery"）
+def _default_db_dir() -> Path:
+    if os.name == "nt":
+        base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+        return Path(base) / "Mazery"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Mazery"
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "mazery"
+
+
+DB_DIR = Path(os.environ.get("MAZERY_DB_DIR") or _default_db_dir())
+
+
+def ensure_db_dir() -> Path:
+    """真正初始化数据库时才创建目录（import 阶段不做任何磁盘操作）"""
+    DB_DIR.mkdir(parents=True, exist_ok=True)
+    return DB_DIR
+
 
 # SQLite 连接字符串（支持相对路径和绝对路径）
-DATABASE_URL = f"sqlite+aiosqlite:///{db_dir / 'mazery.db'}"
+DATABASE_URL = f"sqlite+aiosqlite:///{(DB_DIR / 'mazery.db').as_posix()}"
 
 # ---------- 默认 LLM 配置 ----------
 # 可从环境变量覆盖，方便不同环境下切换
