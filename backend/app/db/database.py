@@ -31,6 +31,8 @@ AsyncSessionFactory=async_sessionmaker(
 #初始化数据库
 async def init_db() -> None:
     ensure_db_dir()  # 建库时才创建数据目录
+    # 导入 models 以注册全部 ORM 表到 Base.metadata（否则 create_all 不会建表）
+    from backend.app.db import models  # noqa: F401
     async with engine.begin() as conn:
         # 开启 WAL 模式（提升并发读写性能）
         await conn.execute(text("PRAGMA journal_mode=WAL"))

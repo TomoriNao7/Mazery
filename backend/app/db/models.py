@@ -82,6 +82,8 @@ class Clue(Base):
     description:Mapped[str]=mapped_column(Text,nullable=False)#线索描述
     location:Mapped[Optional[str]]=mapped_column(String(100),nullable=True)#线索位置
     is_key:Mapped[int]=mapped_column(Integer,default=0)#是否是关键线索 1=直接指向真凶的证据链环节 0=误导线索
+    difficulty:Mapped[str]=mapped_column(String(10),nullable=False,default="easy")#发现难度 easy/medium/hard
+    act:Mapped[Optional[int]]=mapped_column(Integer,nullable=True)#线索所属幕数（线索提前泄露校验用）
     points_to:Mapped[Optional[str]]=mapped_column(String(36),nullable=True)#指向的角色id，可为真凶也可为误导
     found:Mapped[int]=mapped_column(Integer,default=0)#是否被找到
 
@@ -146,7 +148,7 @@ class Settings(Base):
 
     key:Mapped[str]=mapped_column(String(64),primary_key=True)#设置项名称
     value:Mapped[str]=mapped_column(Text,nullable=False)#设置项值（Json字符串）
-    update_at:Mapped[str]=mapped_column(String(25),default=now_iso,onupdate=now_iso)
+    updated_at:Mapped[str]=mapped_column(String(25),default=now_iso,onupdate=now_iso)
 
 # ============================================================
 # NPC 知识状态表（npc_knowledge_states）
