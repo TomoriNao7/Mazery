@@ -5,10 +5,16 @@ import copy
 import hashlib
 import json
 import math
+import os
 import time
 from typing import List, Dict, Any, Optional, Tuple, Set, Callable
 from pathlib import Path
 from dataclasses import dataclass, field
+
+# 模型默认走本地缓存（HF_HUB_OFFLINE=1），避免每次加载时联网检查更新；
+# 若用户显式设置了环境变量则以用户为准（setdefault 不覆盖）
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 # 第三方库
 import numpy as np
@@ -114,7 +120,18 @@ class HybridRetriever:
 
         # 3. 构建索引
         self._build_bm25_index()
-        self._build_faiss_index(embedding_model)
+        try:
+            self._build_faiss_index(embedding_model)
+        except Exception as e:
+            # TRD 10.6：Embedding/FAISS 不可用时降级为仅 BM25 + 标签检索
+            print(f"[RAG] Embedding/FAISS 构建失败，降级为仅 BM25: {e}")
+            self.faiss_available = False
+            self.embedder = None
+            self.faiss_index = None
+            self.faiss_id_map = {}
+            self._embeddings = None
+            self._emb_dim = 0
+            self._doc_row = {}
 
         # 4. 加载 Reranker（可选）
         self.use_reranker = use_reranker
@@ -198,6 +215,7 @@ class HybridRetriever:
             self.faiss_id_map[idx] = doc
 
         print(f"[RAG] FAISS 索引构建完成，维度 {dim}，{self.faiss_index.ntotal} 个向量")
+        self.faiss_available = True
 
     # ---------- Query Rewriting ----------
 
@@ -287,9 +305,13 @@ class HybridRetriever:
         id_map: Optional[Dict[int, Document]] = None,
     ) -> List[Tuple[Document, float]]:
         """FAISS 向量召回。index/id_map 缺省时用全量索引（标签子集检索时传入临时索引）。"""
+        if not getattr(self, "faiss_available", False):
+            return []
         vec = self.embedder.encode([query], normalize_embeddings=True)
         vec = np.array(vec).astype('float32')
         idx = index or self.faiss_index
+        if idx is None:
+            return []
         imap = id_map if id_map is not None else self.faiss_id_map
 
         scores, indices = idx.search(vec, recall_k)
@@ -311,12 +333,16 @@ class HybridRetriever:
         """
         tokenized = [self._tokenize(d.content) for d in docs]
         bm25_index = BM25Okapi(tokenized)
+        id_map = {i: doc for i, doc in enumerate(docs)}
+
+        # FAISS 不可用时只返回 BM25 子集索引
+        if not getattr(self, "faiss_available", False):
+            return bm25_index, None, id_map
 
         rows = [self._doc_row[d.id] for d in docs]
         vectors = self._embeddings[rows]
         faiss_index = faiss.IndexFlatIP(self._emb_dim)
         faiss_index.add(vectors)
-        id_map = {i: doc for i, doc in enumerate(docs)}
 
         return bm25_index, faiss_index, id_map
 
@@ -806,7 +832,17 @@ class HybridRetriever:
 
         # 重建索引（FAISS 用保存的模型名，避免依赖 sentence-transformers 内部结构）
         self._build_bm25_index()
-        self._build_faiss_index(self.embedder_model)
+        try:
+            self._build_faiss_index(self.embedder_model)
+        except Exception as e:
+            print(f"[RAG] FAISS 重建失败，降级为仅 BM25: {e}")
+            self.faiss_available = False
+            self.embedder = None
+            self.faiss_index = None
+            self.faiss_id_map = {}
+            self._embeddings = None
+            self._emb_dim = 0
+            self._doc_row = {}
 
         # 清空缓存
         self.cache.clear()

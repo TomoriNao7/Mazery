@@ -50,7 +50,9 @@ LLM_CONFIG = {
 RAG_CONFIG = {
     # Embedding / Reranker 模型
     "embedding_model": os.getenv("RAG_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5"),
-    "reranker_model": os.getenv("RAG_RERANKER_MODEL", "BAAI/bge-reranker-v2-m3"),
+    # 默认用 bge-reranker-base（本地已缓存，避免首次联网下载）；如需更强精排
+    # 可设 RAG_RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+    "reranker_model": os.getenv("RAG_RERANKER_MODEL", "BAAI/bge-reranker-base"),
     # Reranker 最大输入长度（token）
     "reranker_max_length": int(os.getenv("RAG_RERANKER_MAX_LENGTH", "1024")),
     # RRF 融合常数
