@@ -38,8 +38,10 @@ class DocumentStructure:
 class KnowledgeLoader:
     """加载 RAG 知识文档，生成块列表和结构索引"""
 
-    # 知识库根目录（相对于项目根）
+    # 知识库根目录（相对于项目根）：rag/ 为原始 RAG 知识库，skills/ 为技能方法论
     RAG_ROOT = Path(__file__).parent.parent / "data" / "knowledge" / "rag"
+    SKILLS_ROOT = Path(__file__).parent.parent / "data" / "knowledge" / "skills"
+    ROOTS = [RAG_ROOT, SKILLS_ROOT]
 
     # 切块参数
     MAX_CHARS = 600  # 单块最大字符数（约300~400 token，细粒度利于召回与精排）
@@ -48,9 +50,17 @@ class KnowledgeLoader:
     TABLE_ROW_PATTERN = re.compile(r'^\s*\|.*\|.*$')
 
     def __init__(self, root_dir: Optional[Path] = None):
-        self.root_dir = Path(root_dir) if root_dir else self.RAG_ROOT
-        if not self.root_dir.exists():
-            raise FileNotFoundError(f"Knowledge directory not found: {self.root_dir}")
+        if root_dir is not None:
+            # 自定义根目录（兼容单目录用法）：只加载该目录
+            self.root_dir = Path(root_dir)
+            self.roots = [self.root_dir]
+        else:
+            # 默认加载 rag/ + skills/ 两个知识根目录
+            self.root_dir = self.RAG_ROOT
+            self.roots = list(self.ROOTS)
+        for r in self.roots:
+            if not r.exists():
+                raise FileNotFoundError(f"Knowledge directory not found: {r}")
 
         self.documents: List[Document] = []
         self.structures: Dict[str, DocumentStructure] = {}
@@ -62,15 +72,18 @@ class KnowledgeLoader:
 
     def _load_all(self):
         """遍历所有 .md 文件并加载"""
-        for md_file in self.root_dir.glob("**/*.md"):
-            docs, structure, raw_text = self._load_single_file(md_file)
-            self.documents.extend(docs)
-            if structure:
-                self.structures[structure.file_id] = structure
-            self._raw_text_cache[structure.file_id] = raw_text
+        for root in self.roots:
+            for md_file in root.glob("**/*.md"):
+                docs, structure, raw_text = self._load_single_file(md_file, root)
+                self.documents.extend(docs)
+                if structure:
+                    self.structures[structure.file_id] = structure
+                self._raw_text_cache[structure.file_id] = raw_text
 
-    def _load_single_file(self, file_path: Path) -> Tuple[List[Document], Optional[DocumentStructure], str]:
-        """加载单个 Markdown 文件"""
+    def _load_single_file(self, file_path: Path,
+                          root_dir: Optional[Path] = None) -> Tuple[List[Document], Optional[DocumentStructure], str]:
+        """加载单个 Markdown 文件（file_id 相对传入的知识根目录计算）"""
+        root_dir = root_dir or self.root_dir
         with open(file_path, "r", encoding="utf-8") as f:
             raw = f.read()
 
@@ -79,7 +92,7 @@ class KnowledgeLoader:
         metadata = frontmatter or {}
 
         # 2. 推断文件ID和标签
-        rel_path = str(file_path.relative_to(self.root_dir))
+        rel_path = str(file_path.relative_to(root_dir))
         parent_folder = file_path.parent.name
         # file_id 直接用相对路径规范化，保证跨目录唯一：
         # background/bg_仙侠.md → background_bg_仙侠；core/01_诡计分类大全.md → core_01_诡计分类大全
@@ -405,6 +418,22 @@ class KnowledgeLoader:
             outline=outline,
             summary=summary
         )
+
+    def knowledge_fingerprint(self) -> str:
+        """全部知识根目录的文件指纹（相对路径+大小+修改时间），供索引缓存失效判定。"""
+        import hashlib
+
+        h = hashlib.md5()
+        for root in self.roots:
+            for f in sorted(root.rglob("*.md")):
+                try:
+                    stat = f.stat()
+                except OSError:
+                    continue
+                h.update(
+                    f"{f.relative_to(root)}|{stat.st_size}|{int(stat.st_mtime)}|".encode()
+                )
+        return h.hexdigest()
 
     # ---------- 对外接口 ----------
 

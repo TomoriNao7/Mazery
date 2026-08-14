@@ -25,7 +25,7 @@ from sentence_transformers import SentenceTransformer, CrossEncoder
 from openai import AsyncOpenAI
 
 # 本地模块
-from backend.app.config import RAG_CONFIG, LLM_CONFIG
+from backend.app.config import RAG_CONFIG, LLM_CONFIG, DB_DIR
 from backend.app.data.loader import KnowledgeLoader, Document
 
 
@@ -60,6 +60,10 @@ USER_DICT_PATH = Path(RAG_CONFIG["user_dict_path"])
 
 # 子集索引缓存上限（超出后整体清空重建；缓存很小、重建成本低）
 SUBSET_CACHE_MAX = 16
+
+# FAISS 索引落盘缓存：避免每次启动重复嵌入知识库
+INDEX_CACHE_DIR = DB_DIR / "rag_index"
+INDEX_CACHE_FILES = ("faiss.index", "embeddings.npy", "meta.json")
 
 # 中文停用词（BM25 词频统计时过滤，避免停用词稀释关键词权重）
 STOPWORDS = frozenset({
@@ -118,20 +122,22 @@ class HybridRetriever:
         for fid in self.file_map:
             self.file_map[fid].sort(key=lambda d: d.chunk_index)
 
-        # 3. 构建索引
+        # 3. 构建索引（优先加载落盘缓存，避免每次启动重复嵌入知识库）
         self._build_bm25_index()
-        try:
-            self._build_faiss_index(embedding_model)
-        except Exception as e:
-            # TRD 10.6：Embedding/FAISS 不可用时降级为仅 BM25 + 标签检索
-            print(f"[RAG] Embedding/FAISS 构建失败，降级为仅 BM25: {e}")
-            self.faiss_available = False
-            self.embedder = None
-            self.faiss_index = None
-            self.faiss_id_map = {}
-            self._embeddings = None
-            self._emb_dim = 0
-            self._doc_row = {}
+        if not self._try_load_index_cache(embedding_model):
+            try:
+                self._build_faiss_index(embedding_model)
+                self._save_index_cache()
+            except Exception as e:
+                # TRD 10.6：Embedding/FAISS 不可用时降级为仅 BM25 + 标签检索
+                print(f"[RAG] Embedding/FAISS 构建失败，降级为仅 BM25: {e}")
+                self.faiss_available = False
+                self.embedder = None
+                self.faiss_index = None
+                self.faiss_id_map = {}
+                self._embeddings = None
+                self._emb_dim = 0
+                self._doc_row = {}
 
         # 4. 加载 Reranker（可选）
         self.use_reranker = use_reranker
@@ -171,6 +177,61 @@ class HybridRetriever:
         """中文分词（用于 BM25）：领域词典 + 停用词过滤"""
         words = jieba.lcut(text)
         return [w for w in words if w.strip() and w not in STOPWORDS]
+
+    # ---------- 索引落盘缓存 ----------
+
+    def _try_load_index_cache(self, model_name: str) -> bool:
+        """尝试从磁盘加载 FAISS 索引与向量矩阵。
+
+        校验：模型名一致 + 文档 id 顺序一致 + 知识库指纹一致。
+        加载成功仍会加载 Embedding 模型（查询编码需要），但跳过 1370 块文档的批量编码。
+        """
+        index_file = INDEX_CACHE_DIR / "faiss.index"
+        emb_file = INDEX_CACHE_DIR / "embeddings.npy"
+        meta_file = INDEX_CACHE_DIR / "meta.json"
+        if not all(p.exists() for p in (index_file, emb_file, meta_file)):
+            return False
+        try:
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            if meta.get("model") != model_name:
+                return False
+            if meta.get("doc_ids") != [d.id for d in self.documents]:
+                return False
+            if meta.get("fingerprint") != self.loader.knowledge_fingerprint():
+                return False
+
+            self.embedder = SentenceTransformer(model_name, device="cpu")
+            self.embedder_model = model_name
+            self.faiss_index = faiss.read_index(str(index_file))
+            self._embeddings = np.load(emb_file)
+            self._emb_dim = int(self._embeddings.shape[1])
+            doc_ids = meta["doc_ids"]
+            self.faiss_id_map = {i: self.documents[i] for i in range(len(doc_ids))}
+            self._doc_row = {doc_id: i for i, doc_id in enumerate(doc_ids)}
+            self.faiss_available = True
+            print(f"[RAG] 从缓存加载 FAISS 索引（{self.faiss_index.ntotal} 个向量）")
+            return True
+        except Exception as e:
+            print(f"[RAG] 索引缓存加载失败，将重新构建: {e}")
+            return False
+
+    def _save_index_cache(self) -> None:
+        """把 FAISS 索引、向量矩阵与元数据写入磁盘。"""
+        try:
+            INDEX_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            faiss.write_index(self.faiss_index, str(INDEX_CACHE_DIR / "faiss.index"))
+            np.save(INDEX_CACHE_DIR / "embeddings.npy", self._embeddings)
+            (INDEX_CACHE_DIR / "meta.json").write_text(
+                json.dumps({
+                    "model": self.embedder_model,
+                    "doc_ids": [d.id for d in self.documents],
+                    "fingerprint": self.loader.knowledge_fingerprint(),
+                }, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[RAG] FAISS 索引已缓存到 {INDEX_CACHE_DIR}")
+        except Exception as e:
+            print(f"[RAG] 索引缓存写入失败（不影响本次运行）: {e}")
 
     def _build_bm25_index(self):
         """构建 BM25 索引"""
