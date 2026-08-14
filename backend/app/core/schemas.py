@@ -111,6 +111,34 @@ class NpcResponse(BaseModel):
     emotion_shift: Dict[str, float] = Field(description="情绪变化量，如 {stress: 0.1}")
 
 
+class PrivateChatItem(BaseModel):
+    """单组 NPC 私聊结果（TRD 6.3）。"""
+
+    initiator_id: str
+    target_id: str
+    content_summary: str = Field(description="私聊内容摘要（仅参与双方可见）")
+    player_visible_description: str = Field(description="玩家可见的表象描述")
+
+
+class PrivateChatBatch(BaseModel):
+    """NPC 私聊批量输出（1 次 LLM 调用生成多组）。"""
+
+    chats: List[PrivateChatItem]
+
+
+class NpcStrategyItem(BaseModel):
+    """单个 NPC 的下一幕策略（TRD 6.5）。"""
+
+    npc_id: str
+    strategy: str  # defensive/threaten/frame/confide/ally/trade
+
+
+class NpcStrategyBatch(BaseModel):
+    """每幕结束批量生成的 NPC 策略。"""
+
+    strategies: List[NpcStrategyItem]
+
+
 # ==================== 审查与揭晓 ====================
 
 class ReviewResult(BaseModel):

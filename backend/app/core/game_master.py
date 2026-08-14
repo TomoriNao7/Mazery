@@ -68,7 +68,10 @@ def _get(obj: Any, method: str, attr: str, default: Any = None) -> Any:
     return getattr(obj, attr, default)
 
 
-async def process_player_action(action: str, game_state) -> AsyncIterator[str]:
+async def process_player_action(action: str,
+                                game_state,
+                                act_machine=None,
+                                npc_simulator=None) -> AsyncIterator[str]:
     """
     每轮玩家行动处理：注入 game_master + character_actor，流式返回主持结果。
 
@@ -76,18 +79,28 @@ async def process_player_action(action: str, game_state) -> AsyncIterator[str]:
         action: 玩家本轮行动描述（文本）
         game_state: 游戏状态对象，需暴露 active_npcs、summary()、
                     get_relevant_truth()、current_act、round_in_act
+        act_machine: 可选 ActStateMachine，注入当前幕硬约束摘要
+        npc_simulator: 可选 NpcSimulator，注入所有 NPC 动态状态卡
     """
     sm = get_skill_manager()
-    npc_contexts = _build_npc_contexts(_get(game_state, None, "active_npcs", []))
+    if npc_simulator is not None:
+        npc_contexts = npc_simulator.context_cards()
+    else:
+        npc_contexts = _build_npc_contexts(_get(game_state, None, "active_npcs", []))
+
+    act_summary = act_machine.summary() if act_machine is not None else {}
 
     prompt = sm.build_system_prompt(
         ["game_master", "character_actor"],
         player_action=action,
         game_state=_get(game_state, "summary", "summary", {}),
+        act_state=act_summary,
         npc_contexts=npc_contexts,
         truth_snippet=_get(game_state, "get_relevant_truth", "truth_snippet", {}),
-        current_act=_get(game_state, None, "current_act", 1),
-        round_number=_get(game_state, None, "round_in_act", 1),
+        current_act=act_summary.get("current_act")
+        or _get(game_state, None, "current_act", 1),
+        round_number=act_summary.get("round_in_act")
+        or _get(game_state, None, "round_in_act", 1),
     )
     async for chunk in get_llm_client().stream(prompt):
         yield chunk

@@ -6,7 +6,10 @@ from sqlalchemy import select,func,delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.app.db.models import Script,ScriptCharacter,Clue,Game,GameMessage,Settings,NPCKnowledgeState,InfoPropagationLog,GameSave
+from backend.app.db.models import (
+    Script, ScriptCharacter, Clue, Game, GameMessage, Settings,
+    NPCKnowledgeState, InfoPropagationLog, GameSave, now_iso,
+)
 
 
 # ============================================================
@@ -365,3 +368,91 @@ class SettingsRepo(BaseRepository):
             except json.JSONDecodeError:
                 all_data[s.key] = s.value
         return all_data
+
+
+# ============================================================
+# NpcStateRepo — NPC 知识状态与信息传播日志仓储（TRD 六）
+# ============================================================
+class NpcStateRepo(BaseRepository):
+    """NPCKnowledgeState 与 InfoPropagationLog 的读写。"""
+
+    async def save_states(self, game_id: str, states: List[Dict[str, Any]]) -> None:
+        """批量 upsert NPC 状态（按 game_id + npc_id）。"""
+        for data in states:
+            npc_id = data.get("npc_id")
+            if not npc_id:
+                continue
+            query = select(NPCKnowledgeState).where(
+                NPCKnowledgeState.game_id == game_id,
+                NPCKnowledgeState.npc_id == npc_id,
+            )
+            row = (await self.session.execute(query)).scalar_one_or_none()
+            payload = json.dumps(data, ensure_ascii=False)
+            if row:
+                row.known_info = data.get("known_info") and json.dumps(data["known_info"], ensure_ascii=False) or None
+                row.suspicions = data.get("suspicions") and json.dumps(data["suspicions"], ensure_ascii=False) or None
+                row.discoveries = data.get("discoveries") and json.dumps(data["discoveries"], ensure_ascii=False) or None
+                row.emotional_state = data.get("emotional_state") and json.dumps(data["emotional_state"], ensure_ascii=False) or None
+                row.current_strategy = data.get("strategy")
+                row.updated_at = now_iso()
+            else:
+                self.session.add(NPCKnowledgeState(
+                    game_id=game_id,
+                    npc_id=npc_id,
+                    known_info=json.dumps(data.get("known_info", []), ensure_ascii=False),
+                    suspicions=json.dumps(data.get("suspicions", {}), ensure_ascii=False),
+                    discoveries=json.dumps(data.get("discoveries", []), ensure_ascii=False),
+                    emotional_state=json.dumps(data.get("emotional_state", {}), ensure_ascii=False),
+                    current_strategy=data.get("strategy", "defensive"),
+                ))
+        await self.session.commit()
+
+    async def load_states(self, game_id: str) -> List[Dict[str, Any]]:
+        """读取某对局全部 NPC 状态（转为 dict，供 NpcSimulator 恢复）。"""
+        query = select(NPCKnowledgeState).where(NPCKnowledgeState.game_id == game_id)
+        rows = (await self.session.execute(query)).scalars().all()
+        states = []
+        for r in rows:
+            states.append({
+                "npc_id": r.npc_id,
+                "public_identity": {},
+                "private_knowledge": [],
+                "alibi": {},
+                "knowledge_boundary": [],
+                "known_info": json.loads(r.known_info) if r.known_info else [],
+                "suspicions": json.loads(r.suspicions) if r.suspicions else {},
+                "discoveries": json.loads(r.discoveries) if r.discoveries else [],
+                "emotional_state": json.loads(r.emotional_state) if r.emotional_state else {},
+                "strategy": r.current_strategy or "defensive",
+            })
+        return states
+
+    async def log_info(self,
+                       game_id: str,
+                       act: int,
+                       info_type: str,
+                       info_content: str,
+                       source_id: Optional[str] = None,
+                       recipients: Optional[List[str]] = None,
+                       player_visible: Optional[str] = None) -> InfoPropagationLog:
+        """写一条信息传播日志（clue_reveal/npc_speech/private_chat）。"""
+        log = InfoPropagationLog(
+            game_id=game_id,
+            act=act,
+            info_type=info_type,
+            info_content=info_content,
+            source_id=source_id,
+            recipients=json.dumps(recipients or [], ensure_ascii=False),
+            player_visible=player_visible,
+        )
+        self.session.add(log)
+        await self.session.commit()
+        await self.session.refresh(log)
+        return log
+
+    async def get_info_logs(self, game_id: str, act: Optional[int] = None) -> List[InfoPropagationLog]:
+        query = select(InfoPropagationLog).where(InfoPropagationLog.game_id == game_id)
+        if act is not None:
+            query = query.where(InfoPropagationLog.act == act)
+        query = query.order_by(InfoPropagationLog.id.asc())
+        return list((await self.session.execute(query)).scalars().all())
