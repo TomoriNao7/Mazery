@@ -66,8 +66,6 @@ python -m uvicorn backend.main:app --port 18920
 
 - 本地 Ollama：`LLM_BASE_URL=http://localhost:11434/v1`，模型如 `qwen3.5:4b`，无需 API Key。
 
-> 你的 API Key 只保存在你本机的数据库（加密）或环境变量里，不会写入仓库。
-
 ## 目录结构
 
 ```
@@ -85,9 +83,3 @@ frontend/
     api/        # Axios 客户端 + SSE
     stores/     # Pinia（game / script / settings）
 ```
-
-## 说明
-
-- 历史游玩剧本库记录保留 7 天，自动清理；可手动加回本地剧本库。
-- 私聊上限：每对 8 轮 × 双方各 2 次 = 32 条，达上限强制结束。
-- 剧本生成信息分层：真凶 / 手法 / 动机等 L3 信息永不对玩家展示。
