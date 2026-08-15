@@ -35,6 +35,13 @@ function createWindow() {
     minHeight: 640,
     title: 'Mazery · 迷城',
     autoHideMenuBar: true,
+    // 隐藏系统文字标题栏，保留右上角原生窗口按钮并重绘为墨色，贴合暗色主题
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#101016', // 与 TitleBar 背景 --bg-soft 一致
+      symbolColor: '#ecebe4',
+      height: 36,
+    },
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),

@@ -67,19 +67,22 @@ button {
   font-family: inherit;
 }
 
-/* ---------- 通用滚动条 ---------- */
+/* ---------- 通用滚动条（透明融入） ---------- */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(201, 162, 110, 0.16);
   border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(201, 162, 110, 0.32);
 }
-::-webkit-scrollbar-track {
+::-webkit-scrollbar-corner {
   background: transparent;
 }
 
