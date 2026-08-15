@@ -6,6 +6,7 @@
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -112,11 +113,16 @@ async def apply_stored_llm_config(session: AsyncSession) -> None:
     stored = await SettingsRepo(session).get("llm_config", {}) or {}
     if not stored:
         return
-    LLM_CONFIG["model"] = stored.get("model", LLM_CONFIG["model"])
-    LLM_CONFIG["base_url"] = stored.get("base_url", LLM_CONFIG["base_url"])
-    LLM_CONFIG["temperature"] = stored.get("temperature", LLM_CONFIG["temperature"])
-    LLM_CONFIG["max_tokens"] = stored.get("max_tokens", LLM_CONFIG["max_tokens"])
-    if stored.get("api_key_encrypted"):
+    # 显式设置的环境变量（启动时）优先于数据库保存值
+    if "LLM_MODEL" not in os.environ:
+        LLM_CONFIG["model"] = stored.get("model", LLM_CONFIG["model"])
+    if "LLM_BASE_URL" not in os.environ:
+        LLM_CONFIG["base_url"] = stored.get("base_url", LLM_CONFIG["base_url"])
+    if "LLM_TEMPERATURE" not in os.environ:
+        LLM_CONFIG["temperature"] = stored.get("temperature", LLM_CONFIG["temperature"])
+    if "LLM_MAX_TOKENS" not in os.environ:
+        LLM_CONFIG["max_tokens"] = stored.get("max_tokens", LLM_CONFIG["max_tokens"])
+    if "LLM_API_KEY" not in os.environ and stored.get("api_key_encrypted"):
         key = _decrypt(stored["api_key_encrypted"])
         if key:
             LLM_CONFIG["api_key"] = key
@@ -133,10 +139,11 @@ async def apply_stored_llm_config(session: AsyncSession) -> None:
 async def get_llm_config(session: AsyncSession = Depends(get_session)):
     repo = SettingsRepo(session)
     stored = await repo.get("llm_config", {}) or {}
-    model = stored.get("model") or LLM_CONFIG["model"]
-    base_url = stored.get("base_url") or LLM_CONFIG["base_url"]
-    temperature = stored.get("temperature", LLM_CONFIG["temperature"])
-    max_tokens = stored.get("max_tokens", LLM_CONFIG["max_tokens"])
+    # 以运行时实际生效的配置为准（启动时环境变量覆盖 / 设置页保存后更新）
+    model = LLM_CONFIG["model"]
+    base_url = LLM_CONFIG["base_url"]
+    temperature = LLM_CONFIG["temperature"]
+    max_tokens = LLM_CONFIG["max_tokens"]
 
     api_key_plain = ""
     if stored.get("api_key_encrypted"):
