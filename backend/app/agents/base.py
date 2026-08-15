@@ -115,9 +115,9 @@ class BaseAgent:
         prompt = self.skill_manager.build_system_prompt(
             self.skill_names,
             rag_manager=self.rag_manager,
-            include_few_shot=False,  # 生成阶段不注入示例，避免复用示例内容
             **context,
         )
+        # 附加原创性硬约束：few_shot 与资料仅供理解格式，严禁照搬其中具体内容
         return prompt + self.ORIGINALITY_DIRECTIVE
 
     # ---------- 生成与校验 ----------
