@@ -139,6 +139,19 @@ class NpcStrategyBatch(BaseModel):
     strategies: List[NpcStrategyItem]
 
 
+class NpcVote(BaseModel):
+    """单个 NPC 的投票（PRD v0.2.0 全角色投票）。"""
+
+    npc_id: str
+    target_id: str
+
+
+class NpcVoteBatch(BaseModel):
+    """NPC 投票批量输出（依据各自怀疑与已知信息，可能被误导）。"""
+
+    votes: List[NpcVote]
+
+
 # ==================== 审查与揭晓 ====================
 
 class ReviewResult(BaseModel):

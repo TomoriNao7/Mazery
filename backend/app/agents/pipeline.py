@@ -39,6 +39,25 @@ PHASE_NODES: Dict[int, str] = {
 }
 
 
+def _build_summary(final_script: Dict[str, Any], user_input: Dict[str, Any]) -> str:
+    """从现有字段拼装剧本简介（不额外调用 LLM，best-effort）。"""
+    parts: List[str] = []
+    outline = user_input.get("outline")
+    if isinstance(outline, str) and outline.strip():
+        parts.append(outline.strip())
+    if not parts:
+        ws = final_script.get("world_setting") or {}
+        desc = ws.get("description") or ws.get("summary") or ws.get("atmosphere")
+        if isinstance(desc, str) and desc.strip():
+            parts.append(desc.strip())
+    title = final_script.get("title") or "未命名剧本"
+    scene = final_script.get("scene") or ""
+    category = final_script.get("category") or ""
+    prefix = f"《{title}》· {category} / {scene}"
+    body = parts[0] if parts else "一场围绕谜团展开的推理游戏。"
+    return (f"{prefix}。{body}")[:200]
+
+
 class ScriptGenerationPipeline:
     """6 个 Agent 串行 + Reviewer 回溯修复的 LangGraph 编排器。"""
 
@@ -170,6 +189,7 @@ class ScriptGenerationPipeline:
                 "scene": final_script["scene"],
                 "player_count": final_script["player_count"] or 6,
                 "outline": final_script["outline"],
+                "summary": _build_summary(final_script, user_input),
                 "is_custom": int(
                     user_input.get("is_custom", 1 if final_script["outline"] else 0)
                 ),

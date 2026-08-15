@@ -7,7 +7,7 @@
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # 私聊动机优先级（TRD 6.3：每幕选 2-3 组，按优先级排序）
 MOTIVE_PRIORITY = {
@@ -248,3 +248,177 @@ class NpcSimulator:
             if st:
                 st.strategy = getattr(item, "strategy", st.strategy)
         return updates
+
+    # ---------- 展示名 ----------
+
+    def display_name(self, npc_id: str) -> str:
+        st = self.states.get(npc_id)
+        if not st:
+            return npc_id
+        pid = st.public_identity or {}
+        return pid.get("name") or pid.get("姓名") or npc_id
+
+    # ---------- 完整上下文（含私有知识，供单 NPC 生成使用） ----------
+
+    def full_context(self, npc_id: str) -> Dict[str, Any]:
+        """该 NPC 的完整上下文卡：公开层 + 自身私有知识 + 不在场证明 + 动态状态。
+
+        只包含该 NPC 自己的信息，不泄露其他角色私有内容与剧本全量真相。
+        """
+        st = self.states.get(npc_id)
+        if not st:
+            return {}
+        ctx = st.context_card()
+        ctx["private_knowledge"] = list(st.private_knowledge)
+        ctx["alibi"] = st.alibi
+        return ctx
+
+    # ---------- 抽卡搜证：为 NPC 分配各自线索（PRD v0.2.0） ----------
+
+    def assign_draw_clues(self, pool_ids: List[str],
+                          player_char_id: Optional[str] = None,
+                          player_chosen: Optional[str] = None) -> Dict[str, str]:
+        """为每个 NPC 分配本幕 1 条线索（写入 discoveries + known_info）。
+
+        排除玩家已选中的线索；玩家扮演的角色不分配（由玩家自行抽卡）。
+        返回 {npc_id: clue_id}。
+        """
+        import random
+        available = [c for c in pool_ids if c != player_chosen]
+        random.shuffle(available)
+        assignments: Dict[str, str] = {}
+        for s in self.states.values():
+            if s.npc_id == player_char_id:
+                continue
+            if not available:
+                break
+            clue_id = available.pop()
+            s.discoveries = [clue_id]  # 仅保留本幕分配的线索（供交换信息阶段使用）
+            note = f"[线索] {clue_id}"
+            if note not in s.known_info:
+                s.known_info.append(note)
+            assignments[s.npc_id] = clue_id
+        return assignments
+
+    # ---------- 私聊：单个 NPC 回复玩家（PRD v0.2.0 第三/五幕） ----------
+
+    async def generate_npc_reply(self, npc_id: str, message: str,
+                                 llm) -> Tuple[str, Optional[str]]:
+        """生成单个 NPC 对玩家私聊消息的回复。
+
+        注入该 NPC 完整上下文（含自身私有知识/秘密/真相，但受凶手硬约束
+        character_actor skill 约束，绝不承认自己是凶手）。返回 (content, micro_expression)。
+        失败时返回兜底话术。
+        """
+        st = self.states.get(npc_id)
+        if not st:
+            return "……", None
+        try:
+            from backend.app.core.schemas import NpcResponse
+            from backend.app.core.skill_manager import get_skill_manager
+            sm = get_skill_manager()
+            prompt = sm.build_system_prompt(
+                ["character_actor"],
+                npc_id=npc_id,
+                npc_context=self.full_context(npc_id),
+                player_message=message,
+                private_chat=True,
+            )
+            result = await llm.call(prompt, schema=NpcResponse)
+            content = getattr(result, "content", None)
+            if not content:
+                return "……（对方似乎不愿多说）", None
+            return content, getattr(result, "micro_expression", None)
+        except Exception:
+            return "……（对方似乎不愿多说）", None
+
+    # ---------- 投票：全角色投票（PRD v0.2.0 第五幕） ----------
+
+    async def cast_npc_votes(self, llm,
+                             player_char_id: Optional[str] = None) -> Dict[str, str]:
+        """为每个 NPC 生成投票：优先 LLM 依据其怀疑与已知线索判断，失败降级为怀疑度最高者。"""
+        import random
+        votes: Dict[str, str] = {}
+        npc_ids = [s.npc_id for s in self.states.values() if s.npc_id != player_char_id]
+
+        try:
+            from backend.app.core.schemas import NpcVoteBatch
+            from backend.app.core.skill_manager import get_skill_manager
+            sm = get_skill_manager()
+            prompt = sm.build_system_prompt(
+                ["character_actor"],
+                vote_decision=True,
+                current_act=5,
+                npc_contexts=self.context_cards(),
+            )
+            result = await llm.call(prompt, schema=NpcVoteBatch)
+            for item in getattr(result, "votes", []):
+                votes[item.npc_id] = item.target_id
+        except Exception:
+            votes = {}
+
+        all_ids = list(self.states)
+        for npc_id in npc_ids:
+            if npc_id in votes:
+                continue
+            st = self.states.get(npc_id)
+            target = None
+            if st and st.suspicions:
+                target = max(st.suspicions, key=st.suspicions.get)
+            if not target or target == npc_id:
+                others = [c for c in all_ids if c != npc_id]
+                target = random.choice(others) if others else None
+            if target:
+                votes[npc_id] = target
+        return votes
+
+    # ---------- NPC↔NPC 私聊：生成玩家可见表象（PRD v0.2.0） ----------
+
+    async def surface_npc_private_chats(self, full: Any, llm) -> List[str]:
+        """评估 NPC 私聊动机 → 批量生成 → 返回玩家可见的表象描述列表。"""
+        candidates = self.evaluate_private_chat_candidates(max_groups=2)
+        if not candidates:
+            return []
+        try:
+            result = await self.generate_private_chats(
+                candidates, full, {"current_act": self._current_act_hint}, llm
+            )
+            return [
+                getattr(c, "player_visible_description", "")
+                for c in getattr(result, "chats", [])
+                if getattr(c, "player_visible_description", "")
+            ]
+        except Exception:
+            surface = []
+            for c in candidates[:2]:
+                a, b = c["initiator"], c["target"]
+                surface.append(
+                    f"{self.display_name(a)} 和 {self.display_name(b)} 在角落里低声交谈了几句，"
+                    f"{self.display_name(b)} 的脸色似乎变了。"
+                )
+            return surface
+
+    _current_act_hint: int = 3
+
+    # ---------- 交换信息：NPC 是否如实介绍自己的线索（PRD v0.2.0） ----------
+
+    def _find_murderer(self, full: Any) -> Optional[str]:
+        cc = (full or {}).get("case_core") or {}
+        return cc.get("murderer_id")
+
+    def npc_exchange_reveals(self, full: Any) -> Dict[str, Optional[Dict[str, Any]]]:
+        """每个 NPC 在交换信息阶段决定是否如实介绍自己拿到的线索。
+
+        规则（规则引擎，无 LLM）：真凶或 strategy 为 threaten/frame 的 NPC
+        会隐瞒/编造；其余如实。返回 {npc_id: {clue_id, truthful} | None}。
+        """
+        murderer = self._find_murderer(full)
+        reveals: Dict[str, Optional[Dict[str, Any]]] = {}
+        for s in self.states.values():
+            clues = [c for c in s.discoveries if c]
+            if not clues:
+                reveals[s.npc_id] = None
+                continue
+            deceptive = (s.npc_id == murderer) or s.strategy in ("threaten", "frame")
+            reveals[s.npc_id] = {"clue_id": clues[0], "truthful": not deceptive}
+        return reveals

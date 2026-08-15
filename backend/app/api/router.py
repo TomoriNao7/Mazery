@@ -4,6 +4,7 @@ from .script import router as script_check
 from .game import router as game_check
 from .setting import router as setting_check
 from .knowledge import router as knowledge_check
+from .library import router as library_check
 
 router=APIRouter()
 
@@ -13,3 +14,4 @@ router.include_router(script_check, prefix="/script")
 router.include_router(game_check, prefix="/game")
 router.include_router(setting_check, prefix="/settings")
 router.include_router(knowledge_check, prefix="/knowledge")
+router.include_router(library_check)

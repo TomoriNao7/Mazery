@@ -10,12 +10,18 @@ import logging
 import re
 from typing import Any, AsyncIterator, Dict, Optional, Type
 
+import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from backend.app.config import LLM_CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+def _default_timeout() -> httpx.Timeout:
+    """连接超时设短（模型未启动时快速降级），读写超时留足（长生成不截断）。"""
+    return httpx.Timeout(connect=5.0, read=90.0, write=90.0, pool=10.0)
 
 
 def _extract_json(text: str) -> str:
@@ -44,7 +50,8 @@ class LlmClient:
                  model: str = LLM_CONFIG["model"],
                  temperature: float = LLM_CONFIG["temperature"],
                  max_tokens: int = LLM_CONFIG["max_tokens"]):
-        self.client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+        self.client = AsyncOpenAI(base_url=base_url, api_key=api_key,
+                                  timeout=_default_timeout(), max_retries=1)
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -107,6 +114,9 @@ class LlmClient:
             **kwargs,
         )
         async for chunk in response:
+            # 部分兼容端点（如 DashScope）的流式 chunk 可能带空 choices，需跳过
+            if not chunk.choices:
+                continue
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 yield delta.content

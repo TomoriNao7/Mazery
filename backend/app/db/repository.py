@@ -8,8 +8,19 @@ from sqlalchemy.orm import selectinload
 
 from backend.app.db.models import (
     Script, ScriptCharacter, Clue, Game, GameMessage, Settings,
-    NPCKnowledgeState, InfoPropagationLog, GameSave, now_iso,
+    NPCKnowledgeState, InfoPropagationLog, GameSave, PlayHistory, now_iso,
 )
+
+
+def _parse_script_full(text: Optional[str]) -> Any:
+    """解析 full_script 文本为对象（容错，解析失败返回 {}）。"""
+    if not text:
+        return {}
+    try:
+        data = json.loads(text)
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 
 # ============================================================
@@ -141,6 +152,16 @@ class ScriptRepo(BaseRepository):
             if hasattr(script,key):
                 setattr(script,key,value)
 
+        await self.session.commit()
+        await self.session.refresh(script)
+        return script
+
+    async def set_saved(self, script_id: str, saved: int = 1) -> Optional[Script]:
+        """标记剧本是否在本地剧本库（is_saved）。返回 None 表示剧本不存在。"""
+        script = await self.get(script_id, load_relation=False)
+        if not script:
+            return None
+        script.is_saved = saved
         await self.session.commit()
         await self.session.refresh(script)
         return script
@@ -456,3 +477,59 @@ class NpcStateRepo(BaseRepository):
             query = query.where(InfoPropagationLog.act == act)
         query = query.order_by(InfoPropagationLog.id.asc())
         return list((await self.session.execute(query)).scalars().all())
+
+
+# ============================================================
+# PlayHistoryRepo — 历史游玩剧本库（7 天清除，按剧本去重）
+# ============================================================
+class PlayHistoryRepo(BaseRepository):
+    """历史游玩剧本库：去重 upsert + 7 天清除 + 最近列表。"""
+
+    RETENTION_DAYS = 7
+
+    async def upsert(self, script_id: str) -> None:
+        """记录一次游玩：同一剧本只保留一行，更新 last_played_at。"""
+        query = select(PlayHistory).where(PlayHistory.script_id == script_id)
+        row = (await self.session.execute(query)).scalar_one_or_none()
+        if row:
+            row.last_played_at = now_iso()
+        else:
+            self.session.add(PlayHistory(script_id=script_id))
+        await self.session.commit()
+
+    async def purge_old(self, days: int = RETENTION_DAYS) -> int:
+        """删除超过 N 天未游玩的记录，返回删除条数。"""
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        result = await self.session.execute(
+            delete(PlayHistory).where(PlayHistory.last_played_at < cutoff)
+        )
+        await self.session.commit()
+        return result.rowcount or 0
+
+    async def list_recent(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """历史库列表：清理过期后，按最近游玩时间倒序（join 剧本基础信息）。"""
+        await self.purge_old()
+        query = (
+            select(PlayHistory, Script)
+            .join(Script, Script.id == PlayHistory.script_id)
+            .order_by(PlayHistory.last_played_at.desc())
+            .limit(limit)
+        )
+        rows = (await self.session.execute(query)).all()
+        from backend.app.core.script_privacy import script_text_size
+        return [
+            {
+                "script_id": ph.script_id,
+                "last_played_at": ph.last_played_at,
+                "id": s.id,
+                "title": s.title,
+                "category": s.category,
+                "scene": s.scene,
+                "player_count": s.player_count,
+                "summary": s.summary,
+                "is_saved": s.is_saved,
+                "text_size": script_text_size(_parse_script_full(s.full_script)),
+            }
+            for ph, s in rows
+        ]

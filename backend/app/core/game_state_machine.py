@@ -1,100 +1,110 @@
-#GM分幕状态机（TRD 第五章）
-"""GM 分幕状态机：五幕硬约束、行动校验、轮次管理、结束条件与强制推进。
+#GM分幕状态机（PRD v0.2.0 第九章 / TRD 第五章）
+"""GM 分幕状态机：抽卡搜证 + 交换信息 + 私聊 + 全角色投票。
 
-依据 TRD 五「每幕硬约束」表：
-    第一幕 开场：允许旁白/自我介绍；禁止搜证/指控/投票；结束=全部角色介绍完毕；上限 2N 轮
-    第二幕 搜证1：允许区域搜索/对话NPC；禁止投票/私聊；结束=探索轮次耗尽；4 轮探索
-    第三幕 讨论：允许对质/质疑/私聊(≤2)；禁止发现新线索；结束=全员发言≥1；公开 8 轮 + 私聊 2 次
-    第四幕 搜证2：允许深入搜索/对话；禁止投票/私聊；结束=探索轮次耗尽；3 轮探索
-    第五幕 投票：允许推理陈述/投票指认；禁止新线索/新对话/私聊；结束=完成投票；8 轮
+五幕结构（PRD v0.2.0）：
+    第一幕 介绍：自我介绍 1 轮 → 互相提问 1 轮
+    第二幕 线索搜证：抽卡（5 选 1）
+    第三幕 交换信息与私聊：交换信息 4 轮 → 私聊（每人发起一次，每对 32 条）
+    第四幕 线索搜查：同第二幕（抽卡）
+    第五幕 收束：交换信息 4 轮 → 私聊 → 公聊 2 轮 → 投票（全角色）
 
-GM 自身动作（narration / system / advance_act）不受玩家行动约束限制。
+GM 自身动作（narration / system / advance / notification）不受约束。
+私聊计数：8 轮 × 每轮双方各发言 2 次 = 32 条消息，达到上限强制结束。
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 
 class ActionType(str, Enum):
-    """玩家与 GM 的动作类型。"""
+    NARRATION = "narration"               # GM 旁白
+    SYSTEM = "system"                     # 系统消息
+    ADVANCE = "advance_act"               # 幕/阶段推进
+    NOTIFICATION = "notification"         # 幕间新隐私/目标通知
+    INTRODUCE = "introduce"               # 自我介绍（第一幕第一轮）
+    QUESTION = "question"                 # 互问 / 追问 / 质疑
+    INTRODUCE_CLUE = "introduce_clue"     # 介绍自己拿到的线索（交换信息第一轮）
+    TALK = "talk"                         # 公聊发言
+    ACCUSE = "accuse"                     # 公开指控/对质
+    DRAW = "draw"                         # 抽卡搜证（第二/四幕）
+    PRIVATE_CHAT_SEND = "private_chat_send"  # 私聊发送
+    VOTE = "vote"                         # 投票指认（第五幕）
+    OBSERVE = "observe"                   # 观察
 
-    NARRATION = "narration"        # GM 旁白（GM 动作）
-    SYSTEM = "system"              # 系统消息（GM 动作）
-    ADVANCE = "advance_act"        # 幕推进（GM 动作）
-    INTRODUCE = "introduce"        # 角色自我介绍
-    SEARCH = "search"              # 区域搜证
-    TALK = "talk"                  # 对话 NPC
-    ACCUSE = "accuse"              # 公开对质/质询
-    VOTE = "vote"                  # 投票指认
-    PRIVATE_CHAT = "private_chat"  # 私聊
-    OBSERVE = "observe"            # 观察
+
+GM_ACTIONS = frozenset({
+    ActionType.NARRATION, ActionType.SYSTEM,
+    ActionType.ADVANCE, ActionType.NOTIFICATION,
+})
+
+# 私聊上限：8 轮 × 每轮双方各发言 2 次 = 32 条消息
+PRIVATE_CHAT_MAX_MESSAGES = 32
 
 
-# GM 专属动作：不受幕约束限制
-GM_ACTIONS = {ActionType.NARRATION, ActionType.SYSTEM, ActionType.ADVANCE}
+@dataclass(frozen=True)
+class StageConfig:
+    """一幕内的一个阶段。kind: rounds=普通轮次 / private=私聊 / vote=投票。"""
+    name: str
+    label: str
+    allowed_actions: FrozenSet[ActionType]
+    kind: str = "rounds"
+    max_rounds: int = 1  # 仅 kind=rounds 使用（玩家在本阶段的可行动轮数）
 
 
 @dataclass(frozen=True)
 class ActConfig:
-    """一幕的硬约束配置。"""
-
     act: int
     name: str
-    allowed_actions: Set[ActionType]      # 玩家允许的行动
-    end_condition: str                     # 结束条件描述
-    max_rounds: int                        # 本轮上限（玩家行动轮）
-    search_rounds: Optional[int] = None    # 探索幕固定搜索轮次
-    max_private_chats: int = 0             # 本幕私聊次数上限
-
-    @property
-    def forbidden_actions(self) -> Set[ActionType]:
-        """玩家禁止行动 = 全部玩家动作 - 允许动作。"""
-        all_player = set(ActionType) - GM_ACTIONS
-        return all_player - self.allowed_actions
+    stages: tuple
 
 
-def _build_acts(player_count: int) -> Dict[int, ActConfig]:
-    """按玩家人数构建五幕配置（第一幕上限 = 2N 轮）。"""
+def _build_acts() -> Dict[int, ActConfig]:
     return {
-        1: ActConfig(
-            act=1, name="开场",
-            allowed_actions={ActionType.INTRODUCE, ActionType.TALK, ActionType.OBSERVE},
-            end_condition="所有角色介绍完毕",
-            max_rounds=2 * player_count,
-        ),
-        2: ActConfig(
-            act=2, name="搜证1",
-            allowed_actions={ActionType.SEARCH, ActionType.TALK, ActionType.OBSERVE},
-            end_condition="探索轮次耗尽",
-            max_rounds=4,
-            search_rounds=4,
-        ),
-        3: ActConfig(
-            act=3, name="讨论",
-            allowed_actions={ActionType.TALK, ActionType.ACCUSE, ActionType.PRIVATE_CHAT, ActionType.OBSERVE},
-            end_condition="所有角色发言≥1次",
-            max_rounds=8,
-            max_private_chats=2,
-        ),
-        4: ActConfig(
-            act=4, name="搜证2",
-            allowed_actions={ActionType.SEARCH, ActionType.TALK, ActionType.OBSERVE},
-            end_condition="探索轮次耗尽",
-            max_rounds=3,
-            search_rounds=3,
-        ),
-        5: ActConfig(
-            act=5, name="投票",
-            allowed_actions={ActionType.TALK, ActionType.ACCUSE, ActionType.VOTE, ActionType.OBSERVE},
-            end_condition="用户完成投票",
-            max_rounds=8,
-        ),
+        1: ActConfig(1, "介绍", (
+            StageConfig("intro_r1", "自我介绍",
+                        frozenset({ActionType.INTRODUCE, ActionType.TALK, ActionType.OBSERVE})),
+            StageConfig("intro_r2", "互相提问",
+                        frozenset({ActionType.QUESTION, ActionType.TALK, ActionType.OBSERVE})),
+        )),
+        2: ActConfig(2, "线索搜证", (
+            StageConfig("draw", "抽卡搜证",
+                        frozenset({ActionType.DRAW, ActionType.OBSERVE})),
+        )),
+        3: ActConfig(3, "交换信息与私聊", (
+            StageConfig("exchange", "交换信息",
+                        frozenset({ActionType.INTRODUCE_CLUE, ActionType.QUESTION,
+                                   ActionType.TALK, ActionType.ACCUSE, ActionType.OBSERVE}),
+                        max_rounds=4),
+            StageConfig("private", "私聊",
+                        frozenset({ActionType.PRIVATE_CHAT_SEND}),
+                        kind="private"),
+        )),
+        4: ActConfig(4, "线索搜查", (
+            StageConfig("draw", "抽卡搜证",
+                        frozenset({ActionType.DRAW, ActionType.OBSERVE})),
+        )),
+        5: ActConfig(5, "收束", (
+            StageConfig("exchange", "交换信息",
+                        frozenset({ActionType.INTRODUCE_CLUE, ActionType.QUESTION,
+                                   ActionType.TALK, ActionType.ACCUSE, ActionType.OBSERVE}),
+                        max_rounds=4),
+            StageConfig("private", "私聊",
+                        frozenset({ActionType.PRIVATE_CHAT_SEND}),
+                        kind="private"),
+            StageConfig("public", "公聊",
+                        frozenset({ActionType.TALK, ActionType.QUESTION,
+                                   ActionType.ACCUSE, ActionType.OBSERVE}),
+                        max_rounds=2),
+            StageConfig("vote", "投票",
+                        frozenset({ActionType.VOTE}),
+                        kind="vote"),
+        )),
     }
 
 
 class ActStateMachine:
-    """五幕状态机：校验行动、累计轮次、判定结束、推进/强制推进。"""
+    """五幕状态机：分阶段校验行动、累计轮次、私聊会话计数、全角色投票、推进。"""
 
     def __init__(self,
                  player_count: int = 6,
@@ -106,138 +116,200 @@ class ActStateMachine:
             raise ValueError(f"current_act 非法: {current_act}（应为 1-5）")
         self.player_count = player_count
         self.current_act = current_act
-        self.status = status                 # playing/paused/voted/completed
-        self.round_in_act = 0                # 本幕玩家行动轮数
-        self.search_rounds_used = 0          # 探索幕已用搜索轮次
-        self.private_chats_used = 0          # 本幕已用私聊次数
-        self.introduced: Set[str] = set()    # 已介绍角色 id
-        self.spoken: Set[str] = set()        # 已发言角色 id（第三幕结束条件）
-        self.voted = False                   # 第五幕是否完成投票
+        self.status = status                    # playing/voted/completed
+        self.stage_index = 0                    # 当前阶段序号（当前幕内）
+        self.round_in_stage = 0                 # 本阶段已完成的轮次
+        # 私聊会话：initiator → {target, count, closed}
+        self.private_sessions: Dict[str, Dict[str, Any]] = {}
+        self.votes: Dict[str, str] = {}         # 投票人 id → 目标角色 id
         self.act_log: List[Dict[str, Any]] = []
-
-        self._acts = _build_acts(player_count)
+        self._acts = _build_acts()
 
     # ---------- 配置 ----------
 
     @property
-    def config(self) -> ActConfig:
+    def act_config(self) -> ActConfig:
         return self._acts[self.current_act]
+
+    @property
+    def stage_config(self) -> StageConfig:
+        return self.act_config.stages[self.stage_index]
+
+    @staticmethod
+    def _pair_key(a: str, b: str) -> str:
+        return "|".join(sorted((a, b)))
 
     # ---------- 行动校验 ----------
 
     def validate_action(self,
                         action_type: ActionType,
                         actor_id: Optional[str] = None) -> Tuple[bool, str]:
-        """校验一个玩家动作在当前幕是否被允许。返回 (是否允许, 原因)。"""
+        """校验一个玩家动作在当前阶段是否被允许。返回 (是否允许, 原因)。"""
         if action_type in GM_ACTIONS:
             return True, ""
+        cfg = self.stage_config
+        if action_type not in cfg.allowed_actions:
+            return False, f"第{self.current_act}幕（{self.act_config.name}·{cfg.label}）禁止该行动: {action_type.value}"
 
-        cfg = self.config
-        if action_type in cfg.forbidden_actions:
-            return False, f"第{cfg.act}幕（{cfg.name}）禁止该行动: {action_type.value}"
+        if cfg.kind == "rounds":
+            if self.round_in_stage >= cfg.max_rounds:
+                return False, "本阶段已达轮次上限"
+            return True, ""
 
-        if self.round_in_act >= cfg.max_rounds:
-            return False, "本幕已达轮次上限，即将强制推进"
+        if cfg.kind == "private":
+            if action_type is ActionType.PRIVATE_CHAT_SEND and not actor_id:
+                return False, "缺少私聊发起人"
+            return True, ""
 
-        if action_type is ActionType.PRIVATE_CHAT and self.private_chats_used >= cfg.max_private_chats:
-            return False, f"本幕私聊次数已达上限（{cfg.max_private_chats} 次）"
-
-        if action_type is ActionType.VOTE and self.current_act != 5:
-            return False, "投票仅限第五幕"
+        if cfg.kind == "vote":
+            if action_type is ActionType.VOTE and actor_id and actor_id in self.votes:
+                return False, "你已经投过票了"
+            return True, ""
 
         return True, ""
 
-    # ---------- 行动记录 ----------
+    # ---------- 行动记录（普通轮次） ----------
 
     def on_action(self,
                   action_type: ActionType,
                   actor_id: Optional[str] = None,
                   target_id: Optional[str] = None,
                   payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """记录一次行动并更新状态。非法行动会抛 ValueError（调用方应先 validate）。"""
+        """记录一次普通行动并推进本阶段轮次。非法行动抛 ValueError。"""
         ok, reason = self.validate_action(action_type, actor_id)
         if not ok:
             raise ValueError(reason)
-
-        event: Dict[str, Any] = {
+        event = {
             "act": self.current_act,
-            "round": self.round_in_act + 1,
+            "stage": self.stage_config.name,
+            "round": self.round_in_stage + 1,
             "action_type": action_type.value,
             "actor_id": actor_id,
             "target_id": target_id,
             "payload": payload or {},
         }
-
-        if action_type is ActionType.INTRODUCE and actor_id:
-            self.introduced.add(actor_id)
-        if action_type is ActionType.TALK and actor_id:
-            self.spoken.add(actor_id)
-        if action_type is ActionType.PRIVATE_CHAT:
-            self.private_chats_used += 1
-            if actor_id:
-                self.spoken.add(actor_id)
-            if target_id:
-                self.spoken.add(target_id)
-        if action_type is ActionType.SEARCH:
-            self.search_rounds_used += 1
-        if action_type is ActionType.VOTE:
-            self.voted = True
-
-        self.round_in_act += 1
+        if self.stage_config.kind == "rounds":
+            self.round_in_stage += 1
         self.act_log.append(event)
         return event
 
-    # ---------- 结束判定 ----------
+    # ---------- 私聊会话 ----------
+
+    def begin_private_chat(self, initiator: str, target: str) -> Tuple[bool, str]:
+        """发起一次私聊。每个角色只能发起一次；被选择的目标不计入发起次数。"""
+        if self.stage_config.kind != "private":
+            return False, "当前不在私聊阶段"
+        if not initiator or not target:
+            return False, "缺少私聊对象"
+        if initiator in self.private_sessions:
+            return False, "你已经发起过私聊了"
+        self.private_sessions[initiator] = {"target": target, "count": 0, "closed": False}
+        return True, ""
+
+    def record_private_message(self, initiator: str, n: int = 1) -> Tuple[bool, int, bool]:
+        """记录私聊消息。返回 (ok, 当前消息数, 是否达到上限强制结束)。"""
+        session = self.private_sessions.get(initiator)
+        if not session:
+            return False, 0, False
+        count = int(session["count"]) + n
+        session["count"] = count
+        if count >= PRIVATE_CHAT_MAX_MESSAGES:
+            session["closed"] = True
+        return True, count, session["closed"]
+
+    def close_private_session(self, initiator: str) -> None:
+        """主动结束某角色发起的私聊会话（未达上限也结束）。"""
+        session = self.private_sessions.get(initiator)
+        if session:
+            session["closed"] = True
+
+    def private_session(self, initiator: str) -> Optional[Dict[str, Any]]:
+        return self.private_sessions.get(initiator)
+
+    # ---------- 投票 ----------
+
+    def register_vote(self, actor_id: str, target_id: str) -> Tuple[bool, bool]:
+        """登记一票。返回 (ok, 是否已全部投完)。"""
+        if self.stage_config.kind != "vote":
+            return False, False
+        if actor_id in self.votes:
+            return False, False
+        self.votes[actor_id] = target_id
+        complete = len(self.votes) >= self.player_count
+        return True, complete
+
+    # ---------- 结束判定与推进 ----------
 
     def should_advance(self) -> bool:
-        """当前幕是否满足结束条件（轮次耗尽或指定条件达成）。"""
-        cfg = self.config
-        if self.round_in_act >= cfg.max_rounds:
-            return True
-        if cfg.search_rounds is not None and self.search_rounds_used >= cfg.search_rounds:
-            return True
-        if cfg.act == 1 and len(self.introduced) >= self.player_count:
-            return True
-        if cfg.act == 3 and len(self.spoken) >= self.player_count:
-            return True
-        if cfg.act == 5 and self.voted:
-            return True
+        """当前阶段是否满足结束条件。"""
+        cfg = self.stage_config
+        if cfg.kind == "rounds":
+            return self.round_in_stage >= cfg.max_rounds
+        if cfg.kind == "private":
+            all_initiated = len(self.private_sessions) >= self.player_count
+            all_closed = all(s["closed"] for s in self.private_sessions.values())
+            return all_initiated and all_closed
+        if cfg.kind == "vote":
+            return len(self.votes) >= self.player_count
         return False
 
     def advance(self) -> Dict[str, Any]:
-        """推进到下一幕；第五幕完成后进入揭晓状态（status=voted）。"""
+        """推进到下一阶段/下一幕；第五幕投票完成后进入揭晓（status=voted）。"""
         if not self.should_advance():
-            return {"advanced": False, "reason": "本幕结束条件未达成"}
+            return {"advanced": False, "reason": "当前阶段结束条件未达成"}
 
         from_act = self.current_act
-        if self.current_act >= 5:
+        from_stage = self.stage_config.name
+
+        # 第五幕投票完成 → 揭晓
+        if self.current_act == 5 and self.stage_config.kind == "vote":
             self.status = "voted"
             return {
                 "advanced": True,
                 "from_act": from_act,
+                "from_stage": from_stage,
                 "to_act": 5,
                 "status": self.status,
-                "message": "第五幕投票完成，进入真相揭晓",
+                "message": "投票完成，进入真相揭晓",
             }
 
+        # 推进到当前幕的下一阶段
+        if self.stage_index + 1 < len(self.act_config.stages):
+            self.stage_index += 1
+            self.round_in_stage = 0
+            return {
+                "advanced": True,
+                "from_act": from_act,
+                "from_stage": from_stage,
+                "to_act": self.current_act,
+                "stage": self.stage_config.name,
+                "stage_label": self.stage_config.label,
+                "status": self.status,
+                "message": f"第{self.current_act}幕进入阶段：{self.stage_config.label}",
+            }
+
+        # 当前幕阶段耗尽 → 下一幕
         self.current_act += 1
-        self.round_in_act = 0
-        self.search_rounds_used = 0
-        self.private_chats_used = 0
-        self.introduced.clear()
-        self.spoken.clear()
+        self.stage_index = 0
+        self.round_in_stage = 0
+        # 私聊会话与投票仅属于所在幕：切幕时重置（第三/五幕各有一次私聊与投票）
+        self.private_sessions = {}
+        self.votes = {}
         return {
             "advanced": True,
             "from_act": from_act,
+            "from_stage": from_stage,
             "to_act": self.current_act,
+            "stage": self.stage_config.name,
+            "stage_label": self.stage_config.label,
             "status": self.status,
-            "message": f"推进到第{self.current_act}幕（{self.config.name}）",
+            "message": f"推进到第{self.current_act}幕（{self.act_config.name}）",
         }
 
     def force_advance_instruction(self) -> str:
-        """TRD 五「防无法结束」：SYSTEM OVERRIDE 强制推进指令（注入 LLM prompt）。"""
+        """TRD 5.6 防无法结束：SYSTEM OVERRIDE 强制推进指令。"""
         return (
-            "⚠️ SYSTEM OVERRIDE: 本幕已达到互动上限。你必须立即推进到下一幕。\n"
+            "⚠️ SYSTEM OVERRIDE: 当前阶段已达到互动上限。你必须立即推进到下一阶段/下一幕。\n"
             "不允许：新线索、新对话、新场景。\n"
             '格式：{"action": "advance_act", "narration": "..."}'
         )
@@ -246,33 +318,32 @@ class ActStateMachine:
 
     def summary(self) -> Dict[str, Any]:
         """供 LLM prompt 注入的状态摘要。"""
-        cfg = self.config
+        cfg = self.stage_config
         return {
             "current_act": self.current_act,
-            "act_name": cfg.name,
+            "act_name": self.act_config.name,
+            "stage": cfg.name,
+            "stage_label": cfg.label,
             "status": self.status,
-            "round_in_act": self.round_in_act,
-            "max_rounds": cfg.max_rounds,
-            "search_rounds_used": self.search_rounds_used,
-            "search_rounds": cfg.search_rounds,
-            "private_chats_used": self.private_chats_used,
+            "round_in_stage": self.round_in_stage,
+            "max_rounds": cfg.max_rounds if cfg.kind == "rounds" else None,
             "allowed_actions": sorted(a.value for a in cfg.allowed_actions),
-            "forbidden_actions": sorted(a.value for a in cfg.forbidden_actions),
-            "end_condition": cfg.end_condition,
+            "private_sessions": {
+                k: {"target": v["target"], "count": v["count"], "closed": v["closed"]}
+                for k, v in self.private_sessions.items()
+            },
+            "votes": dict(self.votes),
         }
 
     def to_dict(self) -> Dict[str, Any]:
-        """完整状态（用于 Game 存档/恢复）。"""
         return {
             "player_count": self.player_count,
             "current_act": self.current_act,
             "status": self.status,
-            "round_in_act": self.round_in_act,
-            "search_rounds_used": self.search_rounds_used,
-            "private_chats_used": self.private_chats_used,
-            "introduced": sorted(self.introduced),
-            "spoken": sorted(self.spoken),
-            "voted": self.voted,
+            "stage_index": self.stage_index,
+            "round_in_stage": self.round_in_stage,
+            "private_sessions": self.private_sessions,
+            "votes": dict(self.votes),
             "act_log": self.act_log,
         }
 
@@ -283,11 +354,11 @@ class ActStateMachine:
             current_act=data.get("current_act", 1),
             status=data.get("status", "playing"),
         )
-        sm.round_in_act = data.get("round_in_act", 0)
-        sm.search_rounds_used = data.get("search_rounds_used", 0)
-        sm.private_chats_used = data.get("private_chats_used", 0)
-        sm.introduced = set(data.get("introduced", []))
-        sm.spoken = set(data.get("spoken", []))
-        sm.voted = data.get("voted", False)
+        sm.stage_index = int(data.get("stage_index", 0))
+        sm.round_in_stage = int(data.get("round_in_stage", 0))
+        sm.private_sessions = dict(data.get("private_sessions") or {})
+        sm.votes = dict(data.get("votes") or {})
         sm.act_log = data.get("act_log", [])
+        if sm.stage_index >= len(sm.act_config.stages):
+            sm.stage_index = len(sm.act_config.stages) - 1
         return sm

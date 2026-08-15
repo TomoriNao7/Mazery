@@ -2,7 +2,7 @@
 import logging
 from typing import AsyncGenerator
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine,AsyncSession,async_sessionmaker
 
 from sqlalchemy.orm import declarative_base
@@ -28,6 +28,27 @@ AsyncSessionFactory=async_sessionmaker(
     autocommit=False
 )
 
+# 轻量迁移：为已存在的旧库补充新增列（SQLite ALTER TABLE ADD COLUMN）
+_COLUMN_MIGRATIONS = {
+    "scripts": [
+        ("summary", "TEXT"),
+        ("is_saved", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+}
+
+
+async def _migrate(conn) -> None:
+    """确保旧库拥有新增列；新库 create_all 已含，不会重复执行。"""
+
+    def _do(sync_conn) -> None:
+        for table, columns in _COLUMN_MIGRATIONS.items():
+            existing = {c["name"] for c in inspect(sync_conn).get_columns(table)}
+            for name, ddl in columns:
+                if name not in existing:
+                    sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+    await conn.run_sync(_do)
+
 #初始化数据库
 async def init_db() -> None:
     ensure_db_dir()  # 建库时才创建数据目录
@@ -40,6 +61,8 @@ async def init_db() -> None:
         await conn.execute(text("PRAGMA foreign_keys=ON"))
         # 创建所有表（如果不存在）
         await conn.run_sync(Base.metadata.create_all)
+        # 轻量迁移旧库新增列
+        await _migrate(conn)
 
 #FastAPI 依赖注入（获取数据库会话）
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

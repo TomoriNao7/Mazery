@@ -10,6 +10,27 @@ import json
 from typing import Any, Dict
 
 
+def public_field(public: Any, *keys: str) -> Any:
+    """从角色 public 字典容错取字段（支持中英文键），返回第一个非空值。"""
+    if not isinstance(public, dict):
+        return None
+    for k in keys:
+        if public.get(k):
+            return public[k]
+    return None
+
+
+def script_text_size(full: Any) -> int:
+    """统计 full_script 字典中所有字符串字符总数（书架'文本量'）。"""
+    if isinstance(full, str):
+        return len(full)
+    if isinstance(full, dict):
+        return sum(script_text_size(v) for v in full.values())
+    if isinstance(full, list):
+        return sum(script_text_size(v) for v in full)
+    return 0
+
+
 def public_script_view(script: Any) -> Dict[str, Any]:
     """把 Script ORM 对象裁剪为玩家可见的 L1 公共视图。
 
@@ -23,6 +44,7 @@ def public_script_view(script: Any) -> Dict[str, Any]:
         "category": script.category,
         "scene": script.scene,
         "player_count": script.player_count,
+        "summary": getattr(script, "summary", None),
         "created_at": script.created_at,
     }
 

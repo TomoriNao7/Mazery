@@ -29,6 +29,8 @@ class Script(Base):
     player_count:Mapped[int]=mapped_column(Integer,nullable=False,default=6)#游玩人数
     outline:Mapped[Optional[str]]=mapped_column(Text,nullable=True)#用户大纲（自定义模式）
     full_script:Mapped[Optional[str]]=mapped_column(Text,nullable=True)#AI生成的完整剧本 Json
+    summary:Mapped[Optional[str]]=mapped_column(Text,nullable=True)#剧本简介（书架/详情弹窗）
+    is_saved:Mapped[int]=mapped_column(Integer,nullable=False,default=0)#是否在本地剧本库 1=是
     is_custom:Mapped[int]=mapped_column(Integer,nullable=False,default=0)#是否为自定义模式 0=自动 1=自定义
     created_at:Mapped[str]=mapped_column(String(25),default=now_iso)#创建时间戳
 
@@ -42,10 +44,6 @@ class Script(Base):
         cascade="all, delete-orphan"
     )
     games:Mapped[List["Game"]]=relationship(
-        back_populates="script",
-        cascade="all, delete-orphan"
-    )
-    agent_logs:Mapped[List["AgentExecutionLog"]]=relationship(
         back_populates="script",
         cascade="all, delete-orphan"
     )
@@ -189,24 +187,16 @@ class InfoPropagationLog(Base):
     game: Mapped["Game"] = relationship(back_populates="info_logs")
 
 # ============================================================
-# Agent 执行日志表（agent_execution_logs）
+# 历史游玩表（play_history）—— 历史游玩剧本库，7 天自动清除
 # ============================================================
-class AgentExecutionLog(Base):
-    __tablename__ = "agent_execution_logs"
+class PlayHistory(Base):
+    __tablename__ = "play_history"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    script_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("scripts.id", ondelete="SET NULL"), nullable=True)
-    agent_name: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # WorldBuilder/Architect/...
-    phase: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)          # 1-6
-    input_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)     # 输入摘要（agent收到的数据）
-    output_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)    # 输出摘要（agent输出的数据）
-    status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)      # 执行状态：pending/running/passed/failed/degraded
-    retries: Mapped[int] = mapped_column(Integer, default=0)                      # 重试次数
-    duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)    # 执行时长（毫秒）
-    created_at: Mapped[str] = mapped_column(String(25), default=now_iso)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_id)
+    script_id: Mapped[str] = mapped_column(String(36), ForeignKey("scripts.id", ondelete="CASCADE"), nullable=False)
+    last_played_at: Mapped[str] = mapped_column(String(25), default=now_iso)   # 最近游玩时间
 
-    # 关系
-    script: Mapped[Optional["Script"]] = relationship(back_populates="agent_logs")
+    script: Mapped["Script"] = relationship()
 
 # ============================================================
 # 游戏存档表（game_saves）

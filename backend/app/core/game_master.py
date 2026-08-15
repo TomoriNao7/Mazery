@@ -11,11 +11,14 @@ GameState / Game 目前尚未实现（backend/app/models 仍为占位），因�
 """
 
 from dataclasses import dataclass, field
+import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from backend.app.core.llm import get_llm_client
 from backend.app.core.schemas import CaseReveal, GameMasterResponse
 from backend.app.core.skill_manager import get_skill_manager
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -102,6 +105,12 @@ async def process_player_action(action: str,
         round_number=act_summary.get("round_in_act")
         or _get(game_state, None, "round_in_act", 1),
     )
+    # 主持是流式自然语言，不是结构化输出：明确要求输出旁白/台词文本，不要 JSON
+    prompt += (
+        "\n\n请直接输出主持人的旁白与相关 NPC 的台词（自然中文叙述），"
+        "不要输出 JSON、不要输出字段名、不要输出 schema、不要加代码块。"
+        "如果是你的回合，直接说话即可。"
+    )
     async for chunk in get_llm_client().stream(prompt):
         yield chunk
 
@@ -130,3 +139,66 @@ async def reveal_truth(game) -> Any:
         truth=truth,
     )
     return await get_llm_client().call(prompt, schema=CaseReveal)
+
+
+async def generate_transition(game_state,
+                              act_machine,
+                              full: Optional[Dict[str, Any]] = None,
+                              npc_simulator=None) -> Dict[str, Any]:
+    """生成阶段/幕间转场旁白 + 幕间新隐私/新目标通知（PRD v0.2.0）。
+
+    - 旁白：优先 game_master skill 生成，失败降级为模板。
+    - 通知：从剧本 act_structure 提取（best-effort），供前端弹窗。
+    """
+    sm = get_skill_manager()
+    act = act_machine.current_act if act_machine else 1
+    stage_label = ""
+    if act_machine is not None:
+        stage_label = act_machine.stage_config.label
+
+    prompt = sm.build_system_prompt(
+        ["game_master"],
+        transition=True,
+        to_act=act,
+        stage_label=stage_label,
+        act_state=act_machine.summary() if act_machine is not None else {},
+        game_state=game_state,
+        npc_contexts=npc_simulator.context_cards() if npc_simulator is not None else {},
+    )
+    narration = f"—— 第{act}幕 · {stage_label or ''} ——"
+    try:
+        text = await get_llm_client().call(prompt)
+        if text and str(text).strip():
+            narration = str(text).strip()
+    except Exception as e:
+        logger.warning("转场旁白生成失败，使用模板: %s", e)
+
+    return {
+        "narration": narration,
+        "notifications": _extract_act_notifications(full or {}, act),
+    }
+
+
+def _extract_act_notifications(full: Dict[str, Any], act: int) -> List[str]:
+    """从剧本 act_structure 提取第 act 幕的'新隐私/新目标'通知（best-effort）。"""
+    acts = (full.get("act_structure") or {}).get("acts") or []
+    if not acts or act < 1 or act > len(acts):
+        return []
+    entry = acts[act - 1]
+    if not isinstance(entry, dict):
+        return []
+    notifications: List[str] = []
+    for key in ("notifications", "new_secrets", "new_goals", "new_revelations",
+                "goal_updates", "act_switch"):
+        val = entry.get(key)
+        if isinstance(val, str) and val.strip():
+            notifications.append(val.strip())
+        elif isinstance(val, list):
+            for v in val:
+                if isinstance(v, str) and v.strip():
+                    notifications.append(v.strip())
+                elif isinstance(v, dict):
+                    text = "；".join(str(x) for x in v.values() if x)
+                    if text:
+                        notifications.append(text)
+    return notifications

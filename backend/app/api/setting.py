@@ -148,6 +148,8 @@ async def save_llm_config(req: LlmConfigUpdate,
     LLM_CONFIG["base_url"] = req.base_url
     LLM_CONFIG["temperature"] = req.temperature
     LLM_CONFIG["max_tokens"] = req.max_tokens
+    if req.api_key:
+        LLM_CONFIG["api_key"] = req.api_key
     try:
         import backend.app.core.llm as llm_mod
         llm_mod._llm_client = None
