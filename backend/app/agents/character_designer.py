@@ -12,6 +12,7 @@ class CharacterDesignerAgent(BaseAgent):
     name = "character_designer"
     output_key = "characters"
     skill_names = ["character_designer"]
+    max_tokens = 10000
 
     def validate(self, data: Any) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})

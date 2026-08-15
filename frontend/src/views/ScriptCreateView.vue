@@ -128,12 +128,13 @@ onBeforeUnmount(stopProgress)
 
 <template>
   <section class="page anim-fade create">
-    <header class="page-head">
-      <h2 class="h2">创建剧本</h2>
-      <p class="muted">填写必填项，其余交给 AI 补全</p>
-    </header>
+    <div class="create-wrap">
+      <header class="page-head">
+        <h2 class="h2">创建剧本</h2>
+        <p class="muted">填写必填项，其余交给 AI 补全</p>
+      </header>
 
-    <div class="create-card">
+      <div class="create-card">
       <div class="form-row">
         <div class="form-col">
           <label class="field-label">剧本类型 <span class="req">*</span></label>
@@ -178,6 +179,7 @@ onBeforeUnmount(stopProgress)
       <div class="create-actions">
         <button class="btn btn-primary" :disabled="generating" @click="submit">✨ 生成完整剧本</button>
       </div>
+      </div>
     </div>
 
     <!-- 创作进度 -->
@@ -218,6 +220,17 @@ onBeforeUnmount(stopProgress)
 </template>
 
 <style scoped>
+.create {
+  height: 100%;
+  display: flex;
+  overflow-y: auto;
+}
+.create-wrap {
+  margin: auto;
+  width: 100%;
+  max-width: 680px;
+  padding: 24px 20px;
+}
 .page-head {
   margin-bottom: 24px;
 }
@@ -226,6 +239,7 @@ onBeforeUnmount(stopProgress)
   font-size: 13px;
 }
 .create-card {
+  width: 100%;
   max-width: 640px;
   background: var(--surface);
   border: 1px solid var(--border);

@@ -15,6 +15,7 @@ class ArchitectAgent(BaseAgent):
     name = "architect"
     output_key = "case_core"
     skill_names = ["mystery_writer"]
+    max_tokens = 5000
 
     def validate(self, data: Any) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})

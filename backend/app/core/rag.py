@@ -11,11 +11,6 @@ from typing import List, Dict, Any, Optional, Tuple, Set, Callable
 from pathlib import Path
 from dataclasses import dataclass, field
 
-# 模型默认走本地缓存（HF_HUB_OFFLINE=1），避免每次加载时联网检查更新；
-# 若用户显式设置了环境变量则以用户为准（setdefault 不覆盖）
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-
 # 第三方库
 import numpy as np
 import jieba
@@ -27,6 +22,25 @@ from openai import AsyncOpenAI
 # 本地模块
 from backend.app.config import RAG_CONFIG, LLM_CONFIG, DB_DIR
 from backend.app.data.loader import KnowledgeLoader, Document
+
+
+def _models_cached() -> bool:
+    """本机 HF 缓存是否已包含嵌入与重排模型。
+
+    已缓存 → 强制离线（启动快，不联网检查更新）；
+    未缓存 → 保持在线，让首次启动自动下载模型（他人克隆项目后开箱即用）。
+    """
+    hub = Path.home() / ".cache" / "huggingface" / "hub"
+    for model in (RAG_CONFIG["embedding_model"], RAG_CONFIG["reranker_model"]):
+        folder = "models--" + model.replace("/", "--")
+        if not (hub / folder).exists():
+            return False
+    return True
+
+
+if _models_cached():
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 
 # ==================== 配置与常量 ====================

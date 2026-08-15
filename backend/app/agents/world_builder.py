@@ -12,6 +12,7 @@ class WorldBuilderAgent(BaseAgent):
     name = "world_builder"
     output_key = "world_setting"
     skill_names = ["world_builder"]
+    max_tokens = 5000
 
     def validate(self, data: Any) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})

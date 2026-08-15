@@ -115,6 +115,7 @@ class SkillManager:
     def build_system_prompt(self,
                             skill_names: List[str],
                             rag_manager=None,
+                            include_few_shot: bool = True,
                             **context) -> str:
         """
         组合多个 Skill 构建完整 System Prompt。
@@ -122,6 +123,8 @@ class SkillManager:
         Args:
             skill_names: 要组合的 Skill 名称列表，按顺序拼接
             rag_manager: RAG 管理器实例（提供 search_by_tags），用于检索相关知识
+            include_few_shot: 是否注入 few_shot 示例。剧本生成时设为 False，
+                              避免模型直接复用示例中的具体角色/案件（原创性）。
             **context: 当前上下文（游戏状态、NPC信息等）
 
         Returns:
@@ -164,16 +167,17 @@ class SkillManager:
         if tones:
             sections.append("# 语气风格\n" + "\n\n".join(tones))
 
-        # Part 6: 少样本示例
-        parts = []
-        for name in skill_names:
-            fs = self.skills[name].get("few_shot", {})
-            if fs.get("good_example"):
-                parts.append(f"## {name} — 好的做法\n{fs['good_example']}")
-            if fs.get("bad_example"):
-                parts.append(f"## {name} — 坏的做法（不要这样）\n{fs['bad_example']}")
-        if parts:
-            sections.append("# 示例参考\n" + "\n\n".join(parts))
+        # Part 6: 少样本示例（剧本生成时关闭，避免复用示例内容）
+        if include_few_shot:
+            parts = []
+            for name in skill_names:
+                fs = self.skills[name].get("few_shot", {})
+                if fs.get("good_example"):
+                    parts.append(f"## {name} — 好的做法\n{fs['good_example']}")
+                if fs.get("bad_example"):
+                    parts.append(f"## {name} — 坏的做法（不要这样）\n{fs['bad_example']}")
+            if parts:
+                sections.append("# 示例参考\n" + "\n\n".join(parts))
 
         # Part 7: RAG 相关知识
         if rag_manager is not None:

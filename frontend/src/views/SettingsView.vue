@@ -54,13 +54,14 @@ async function save() {
 
 <template>
   <section class="page anim-fade settings">
-    <header class="page-head">
-      <button class="back-btn" @click="router.push('/')">← 返回</button>
-      <h2 class="h2">设置</h2>
-      <p class="muted">选择本地 Ollama 模型，或使用云端 API</p>
-    </header>
+    <div class="settings-wrap">
+      <header class="page-head">
+        <button class="back-btn" @click="router.push('/')">← 返回</button>
+        <h2 class="h2">设置</h2>
+        <p class="muted">选择本地 Ollama 模型，或使用云端 API</p>
+      </header>
 
-    <div class="settings-card">
+      <div class="settings-card">
       <div class="label-title dim">模型预设</div>
       <div v-if="store.loading" class="skeleton" style="height: 40px"></div>
       <div v-else class="preset-grid">
@@ -110,10 +111,22 @@ async function save() {
         </button>
       </div>
     </div>
+    </div>
   </section>
 </template>
 
 <style scoped>
+.settings {
+  height: 100%;
+  display: flex;
+  overflow-y: auto;
+}
+.settings-wrap {
+  margin: auto;
+  width: 100%;
+  max-width: 720px;
+  padding: 24px 20px;
+}
 .page-head {
   margin-bottom: 24px;
 }
@@ -134,6 +147,7 @@ async function save() {
   color: var(--accent-strong);
 }
 .settings-card {
+  width: 100%;
   max-width: 680px;
   background: var(--surface);
   border: 1px solid var(--border);

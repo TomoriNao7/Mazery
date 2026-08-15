@@ -14,6 +14,7 @@ class DirectorAgent(BaseAgent):
     output_key = "act_structure"
     skill_names = ["mystery_writer"]
     schema = FiveActStructure  # mystery_writer 默认映射案件核心，分幕需显式指定
+    max_tokens = 5000
 
     def validate(self, data: Any) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})

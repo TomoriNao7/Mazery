@@ -1,0 +1,19 @@
+# Mazery 后端依赖（Python 3.11+）
+# 安装：pip install -r requirements.txt
+# 说明：FAISS 为 CPU 版；嵌入/重排模型在首次启动时自动从 HuggingFace 下载（~400MB，仅一次）。
+
+fastapi>=0.128
+uvicorn[standard]>=0.39
+sqlalchemy[asyncio]>=2.0.52
+aiosqlite>=0.22
+pydantic>=2.13
+openai>=2.48
+cryptography>=44
+PyYAML>=6.0
+langgraph>=0.6
+faiss-cpu>=1.9
+numpy>=1.26
+jieba>=0.42
+rank-bm25>=0.2
+sentence-transformers>=3
+httpx>=0.28

@@ -1,12 +1,15 @@
 #Pipeline编排器（LangGraph 串行 + 回溯）
-"""剧本生成 Pipeline（TRD 8.1-8.4，LangGraph 版）。
+"""剧本生成 Pipeline（LangGraph 版）。
 
-结构：
+结构（6 次独立 LLM 调用，每次调用单一 Skill、更简单更快）：
     world_builder → architect → character_designer → clue_designer
     → director → reviewer
     reviewer FAIL → 回溯到 critical_issues[0].target_phase 对应的 fix_<phase>
     节点修复（≤ max_backtracks 次）→ 重新审查
     reviewer PASS / PASS_WITH_WEAKNESSES / 回溯耗尽 → finalize 组装最终剧本
+
+加速措施：每次调用的输出上限已收紧（max_tokens）、不注入 few_shot 示例、
+校验从宽、重试次数下调；生成严谨性后期单独打磨。
 
 落库（写 scripts 表）不在本模块内执行：finalize 只组装 final_script，
 由调用方决定如何持久化（数据库操作另行征得同意后接入）。
@@ -83,7 +86,7 @@ class ScriptGenerationPipeline:
         self.reviewer = ReviewerAgent(
             llm=llm, skill_manager=skill_manager, rag_manager=rag_manager)
 
-        # 按 TRD 8.1 顺序暴露（供外部调试/测试）
+        # 按阶段顺序暴露（供外部调试/测试）
         self.agents: List[BaseAgent] = [
             self.world_builder, self.architect, self.character_designer,
             self.clue_designer, self.director, self.reviewer,

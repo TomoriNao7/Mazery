@@ -62,6 +62,16 @@ class BaseAgent:
     skill_names: List[str] = []
     schema: Optional[Type[BaseModel]] = None
     max_retries: int = 3
+    # 生成阶段的输出长度上限（结构化 JSON，无需 16k 默认值；限制可显著缩短生成时间）
+    max_tokens: int = 8000
+
+    # 原创性硬约束：禁止复用示例/资料中的具体内容
+    ORIGINALITY_DIRECTIVE = (
+        "\n\n【原创性要求】你必须创作全新的原创内容。"
+        "严禁直接复用、改写或抄袭示例与参考资料中的任何具体角色、姓名、案件、手法、线索、场景、台词、地点。"
+        "示例与资料仅用于理解格式与规则，绝不能照搬其中的人物或情节。"
+        "所有角色、案件、线索、分幕、真相都必须以用户提供的设定为唯一出发点，完全原创。"
+    )
 
     def __init__(self,
                  llm: Optional[LlmClient] = None,
@@ -102,17 +112,20 @@ class BaseAgent:
         if fix_mode:
             context["fix_mode"] = True
             context["fix_instructions"] = state.get("review", {}).get("critical_issues", [])
-        return self.skill_manager.build_system_prompt(
+        prompt = self.skill_manager.build_system_prompt(
             self.skill_names,
             rag_manager=self.rag_manager,
+            include_few_shot=False,  # 生成阶段不注入示例，避免复用示例内容
             **context,
         )
+        return prompt + self.ORIGINALITY_DIRECTIVE
 
     # ---------- 生成与校验 ----------
 
     async def generate(self, prompt: str) -> Any:
         """调用 LLM 并解析为输出 Schema（失败时返回原始文本）。"""
-        return await self.llm.call(prompt, schema=self.output_schema)
+        return await self.llm.call(prompt, schema=self.output_schema,
+                                   max_tokens=self.max_tokens)
 
     def validate(self, data: Any) -> List[str]:
         """校验输出，返回错误列表。子类可覆盖；默认视为通过。"""

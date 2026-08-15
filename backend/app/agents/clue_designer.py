@@ -12,6 +12,7 @@ class ClueDesignerAgent(BaseAgent):
     name = "clue_designer"
     output_key = "clues"
     skill_names = ["clue_curator"]
+    max_tokens = 7000
 
     def validate(self, data: Any) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})

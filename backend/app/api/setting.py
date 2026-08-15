@@ -103,6 +103,30 @@ def _mask(key: str) -> str:
     return key[:3] + "*" * (len(key) - 7) + key[-4:]
 
 
+async def apply_stored_llm_config(session: AsyncSession) -> None:
+    """启动时把设置页保存的 LLM 配置应用到运行时（含解密 API Key）。
+
+    使设置页保存的模型/BaseURL/Key 在服务重启后仍生效，无需重填。
+    """
+    from backend.app.db.repository import SettingsRepo
+    stored = await SettingsRepo(session).get("llm_config", {}) or {}
+    if not stored:
+        return
+    LLM_CONFIG["model"] = stored.get("model", LLM_CONFIG["model"])
+    LLM_CONFIG["base_url"] = stored.get("base_url", LLM_CONFIG["base_url"])
+    LLM_CONFIG["temperature"] = stored.get("temperature", LLM_CONFIG["temperature"])
+    LLM_CONFIG["max_tokens"] = stored.get("max_tokens", LLM_CONFIG["max_tokens"])
+    if stored.get("api_key_encrypted"):
+        key = _decrypt(stored["api_key_encrypted"])
+        if key:
+            LLM_CONFIG["api_key"] = key
+    try:
+        import backend.app.core.llm as llm_mod
+        llm_mod._llm_client = None
+    except Exception:
+        pass
+
+
 # ---------- 端点 ----------
 
 @router.get("/llm", summary="获取 LLM 配置")
