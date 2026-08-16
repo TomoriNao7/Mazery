@@ -6,12 +6,19 @@ from backend.app.api.router import router as api_router
 from backend.app.api.setting import apply_stored_llm_config
 from backend.app.config import PORT
 from backend.app.db.database import AsyncSessionFactory, init_db
+from backend.app.db.seed import seed_example_scripts
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     #启动时初始化数据库
     await init_db()
+    # 写入内置示例剧本（幂等，仅首次）
+    try:
+        await seed_example_scripts()
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning("示例剧本种子写入失败（忽略）: %s", e)
     # 应用设置页保存的 LLM 配置（含模型/BaseURL/API Key），重启后仍生效
     async with AsyncSessionFactory() as session:
         await apply_stored_llm_config(session)

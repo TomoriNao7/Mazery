@@ -1,0 +1,704 @@
+{
+ "id": "1fce79c6649245a7",
+ "title": "雾港夜访录",
+ "category": "modern",
+ "scene": "蓝雀夜总会 · 浓雾之夜",
+ "player_count": 4,
+ "outline": "一场发生在浓雾之夜的码头夜总会命案。航运巨头陆敬渊陈尸包厢，四位各有秘密的客人卷入漩涡。",
+ "summary": "雾港夜总会浓雾封港之夜，航运大亨陆敬渊暴毙包厢。歌女、侦探、茶商与经理各怀秘密，谁是真凶？",
+ "full_script": {
+  "title": "雾港夜访录",
+  "category": "modern",
+  "scene": "蓝雀夜总会 · 浓雾之夜",
+  "player_count": 4,
+  "outline": "一场发生在浓雾之夜的码头夜总会命案。航运巨头陆敬渊陈尸包厢，四位各有秘密的客人卷入漩涡。",
+  "world_setting": {
+   "genre": "现代推理 · 本格社会派",
+   "era_tier": "写实历史",
+   "world_rules": [
+    "雾港是近代化港口城市，航运与夜总会为上层交际主流",
+    "蓝雀夜总会是当地上流人物的固定聚会场所",
+    "案发当晚浓雾封港，所有宾客与店员都无法离开"
+   ],
+   "physical_rules": [
+    "没有超自然现象，一切犯罪都遵循物理常识",
+    "毒物必须经由饮食或接触进入人体",
+    "监控在楼梯转角存在盲区，无法拍到来往包厢的每一步"
+   ],
+   "scenes": [
+    {
+     "name": "海棠包厢",
+     "act": 1,
+     "areas": [
+      "沙发",
+      "矮几",
+      "窗台"
+     ],
+     "npcs": [
+      "陆敬渊"
+     ]
+    },
+    {
+     "name": "一楼吧台",
+     "act": 1,
+     "areas": [
+      "吧台",
+      "卡座",
+      "舞台"
+     ],
+     "npcs": [
+      "顾知秋",
+      "苏曼卿"
+     ]
+    },
+    {
+     "name": "后台化妆间",
+     "act": 1,
+     "areas": [
+      "梳妆台",
+      "更衣间"
+     ],
+     "npcs": [
+      "苏曼卿"
+     ]
+    },
+    {
+     "name": "楼梯转角",
+     "act": 1,
+     "areas": [
+      "楼梯",
+      "扶手"
+     ],
+     "npcs": [
+      "沈砚舟"
+     ]
+    }
+   ],
+   "forbidden_elements": [
+    "密室瞬移",
+    "幽灵作祟",
+    "药物凭空消失"
+   ]
+  },
+  "case_core": {
+   "murderer_id": "char_su",
+   "murder_method": "将剧毒'醉仙'溶入陆敬渊专享的白兰地，趁他离席时在杯中下毒",
+   "murder_motive": "替母复仇。陆敬渊二十年前抛妻弃女，走私船沉没致其母溺亡",
+   "murder_time": "当晚 21:40 前后",
+   "murder_location": "蓝雀夜总会二楼'海棠'包厢",
+   "timeline": [
+    {
+     "time": "19:30",
+     "event": "陆敬渊抵达蓝雀夜总会，在'海棠'包厢宴请客人"
+    },
+    {
+     "time": "20:00",
+     "event": "苏曼卿登台演唱，目光数次扫向二楼包厢"
+    },
+    {
+     "time": "20:40",
+     "event": "顾知秋亲自将一瓶 1898 年白兰地送入包厢"
+    },
+    {
+     "time": "21:00",
+     "event": "沈砚舟在走廊遇见端着托盘的侍应生，托盘上多了一只高脚杯"
+    },
+    {
+     "time": "21:15",
+     "event": "白鹤龄与陆敬渊在包厢门口争执数分钟后愤然离开"
+    },
+    {
+     "time": "21:40",
+     "event": "侍应生发现陆敬渊倒在包厢内，面色青紫，气绝身亡"
+    }
+   ],
+   "key_clue_chain": [
+    {
+     "step": "死因与投毒——死者血液与杯中白兰地均检出剧毒「醉仙」，且杯口被擦拭抹去指纹，锁定「毒杀 + 有人刻意掩盖」",
+     "clue_id": "clue_k1"
+    },
+    {
+     "step": "毒物来源——后台化妆间废纸篓找到购药票据，签名被撕去，纸背油彩与后台演出服同款，购毒者来自后台",
+     "clue_id": "clue_k2"
+    },
+    {
+     "step": "旧案与身世——档案室沉船案卷宗的借阅笔迹与票据笔迹一致，照片上抱婴女子与苏曼卿神似，揭开复仇动机",
+     "clue_id": "clue_k3"
+    },
+    {
+     "step": "机会锁定——舞台排期显示苏曼卿当晚 21:00-21:40 不在台上，门房看到墨绿旗袍身影端托盘往包厢方向去，锁定真凶",
+     "clue_id": "clue_k4"
+    }
+   ],
+   "red_herrings": [
+    {
+     "clue_id": "clue_m1",
+     "value": "顾知秋挪用的账目看似图财害命，实为他被陆敬渊控制的把柄，与投毒无直接关联"
+    },
+    {
+     "clue_id": "clue_m2",
+     "value": "顾知秋的赌债欠条坐实其经济困境，但与投毒无直接关联"
+    },
+    {
+     "clue_id": "clue_m3",
+     "value": "沈砚舟私下调查受贿案，有恨意但更想活捉陆定罪，与投毒无直接关联"
+    },
+    {
+     "clue_id": "clue_m4",
+     "value": "沈砚舟藏起的针剂看似凶器，实为心绞痛急救药，与投毒无关"
+    },
+    {
+     "clue_id": "clue_m5",
+     "value": "白鹤龄的旧怀表与争执暗示旧怨，但他当晚 21:15 离场后未再返回包厢"
+    },
+    {
+     "clue_id": "clue_m6",
+     "value": "码头股份让渡书坐实白鹤龄旧怨，但与投毒无直接关联"
+    }
+   ]
+  },
+  "characters": {
+   "characters": [
+    {
+     "id": "char_gu",
+     "name": "顾知秋",
+     "public": {
+      "name": "顾知秋",
+      "age": 35,
+      "gender": "男",
+      "profession": "蓝雀夜总会经理",
+      "identity": "蓝雀夜总会经理",
+      "personality": "圆滑世故，见人说人话见鬼说鬼话，对谁都笑容可掬",
+      "appearance": "西装笔挺，袖扣是纯金打制，说话时习惯性转动无名指上的戒指",
+      "background": "白手起家经营蓝雀夜总会十年，是雾港最会来事的生意人"
+     },
+     "relationships": [
+      {
+       "target": "char_su",
+       "relation": "老板与歌女",
+       "detail": "签下苏曼卿驻唱，对她格外照拂"
+      },
+      {
+       "target": "char_shen",
+       "relation": "旧识",
+       "detail": "知道沈砚舟曾是警探"
+      },
+      {
+       "target": "char_bai",
+       "relation": "客人",
+       "detail": "白鹤龄是夜总会的常客"
+      }
+     ],
+     "secrets": [
+      {
+       "surface": "顾知秋人前风光体面",
+       "deep": "他挪用夜总会账目填补赌债，被陆敬渊抓住把柄，被迫替陆洗钱"
+      }
+     ],
+     "motive": {
+      "type": "利益",
+      "description": "被陆敬渊控制，害怕东窗事发，有杀陆灭口的动机"
+     },
+     "truth": {
+      "knows_murderer": false,
+      "has_alibi": "20:40 送酒后一直在吧台亲自结账，多人可证",
+      "note": "不是凶手"
+     },
+     "speaking_style": {
+      "vocabulary": "生意经、圆滑客套话",
+      "tone": "热络，句句带笑",
+      "verbal_ticks": "常以'您说是不是'收尾"
+     },
+     "knowledge_boundary": [
+      "知道陆敬渊掌握自己挪用公款、替他洗钱的把柄"
+     ],
+     "is_accomplice": false
+    },
+    {
+     "id": "char_shen",
+     "name": "沈砚舟",
+     "public": {
+      "name": "沈砚舟",
+      "age": 42,
+      "gender": "男",
+      "profession": "私家侦探",
+      "identity": "落魄侦探",
+      "personality": "烟不离手，说话刻薄但观察力敏锐",
+      "appearance": "旧风衣，夹着一支没点着的烟，眉间有深深皱纹",
+      "background": "曾是警局重案组干探，因一桩受贿案被除名，如今靠接私活过活"
+     },
+     "relationships": [
+      {
+       "target": "char_gu",
+       "relation": "旧识",
+       "detail": "曾是顾知秋的座上宾"
+      },
+      {
+       "target": "char_su",
+       "relation": "调查对象",
+       "detail": "正在暗中调查苏曼卿的真实身份"
+      }
+     ],
+     "secrets": [
+      {
+       "surface": "被冤枉受贿除名",
+       "deep": "当年受贿案是陆敬渊设局栽赃，他一直在收集陆的罪证"
+      }
+     ],
+     "motive": {
+      "type": "报复",
+      "description": "被陆敬渊毁掉前程，有动机但更想活捉陆定罪"
+     },
+     "truth": {
+      "knows_murderer": false,
+      "has_alibi": "21:00 在走廊抽烟，监控可证",
+      "note": "不是凶手"
+     },
+     "speaking_style": {
+      "vocabulary": "刑侦术语、反讽",
+      "tone": "冷嘲热讽",
+      "verbal_ticks": "爱用'有意思'开头"
+     },
+     "knowledge_boundary": [
+      "知道当年受贿案是陆敬渊设局栽赃自己",
+      "正在私下收集陆敬渊的罪证",
+      "怀疑苏曼卿的身份有蹊跷"
+     ],
+     "is_accomplice": false
+    },
+    {
+     "id": "char_bai",
+     "name": "白鹤龄",
+     "public": {
+      "name": "白鹤龄",
+      "age": 58,
+      "gender": "男",
+      "profession": "茶叶商人",
+      "identity": "老茶商",
+      "personality": "沉默寡言，喜怒不形于色",
+      "appearance": "灰布长衫，留着山羊胡，手里常年盘着两枚核桃",
+      "background": "雾港老牌茶行掌柜，据传年轻时走南闯北家底颇厚"
+     },
+     "relationships": [
+      {
+       "target": "char_gu",
+       "relation": "常客",
+       "detail": "每月在蓝雀会客"
+      },
+      {
+       "target": "char_su",
+       "relation": "故人之女",
+       "detail": "认识苏曼卿的母亲"
+      }
+     ],
+     "secrets": [
+      {
+       "surface": "普通茶商",
+       "deep": "二十年前是陆敬渊的合伙人，被陆吞并码头股份后倾家荡产，恨陆入骨"
+      }
+     ],
+     "motive": {
+      "type": "旧怨",
+      "description": "二十年仇怨，表面和解，内心从未放下"
+     },
+     "truth": {
+      "knows_murderer": false,
+      "has_alibi": "21:15 与陆争执后下楼在门口抽烟，门童可证",
+      "note": "不是凶手"
+     },
+     "speaking_style": {
+      "vocabulary": "茶经、老话",
+      "tone": "缓慢低沉",
+      "verbal_ticks": "沉默良久才开口"
+     },
+     "knowledge_boundary": [
+      "认识苏曼卿的母亲",
+      "知道陆敬渊二十年前的走私往事"
+     ],
+     "is_accomplice": false
+    },
+    {
+     "id": "char_su",
+     "name": "苏曼卿",
+     "public": {
+      "name": "苏曼卿",
+      "age": 28,
+      "gender": "女",
+      "profession": "夜总会歌女",
+      "identity": "驻唱歌女",
+      "personality": "歌声清冷，眉眼间总带三分疏离",
+      "appearance": "一身墨绿色旗袍，珍珠耳坠，指尖泛白",
+      "background": "三年前来到雾港，成为蓝雀的头牌歌女，来历成谜"
+     },
+     "relationships": [
+      {
+       "target": "char_bai",
+       "relation": "故人",
+       "detail": "白鹤龄是少数认识她母亲的人"
+      },
+      {
+       "target": "char_gu",
+       "relation": "老板",
+       "detail": "顾知秋对她百般照拂"
+      },
+      {
+       "target": "char_shen",
+       "relation": "被调查者",
+       "detail": "沈砚舟总在暗中打量她"
+      }
+     ],
+     "secrets": [
+      {
+       "surface": "无名歌女",
+       "deep": "她是陆敬渊二十年前遗弃的私生女，母亲因走私船沉没而亡，她隐姓埋名回来复仇"
+      }
+     ],
+     "motive": {
+      "type": "复仇",
+      "description": "替母报仇，恨陆敬渊当年害死母亲又抛弃自己"
+     },
+     "truth": {
+      "knows_murderer": true,
+      "has_alibi": "21:30 在后台化妆间，无人能证",
+      "note": "真凶，在酒杯中下毒"
+     },
+     "speaking_style": {
+      "vocabulary": "歌词般的修辞",
+      "tone": "清冷，字字斟酌",
+      "verbal_ticks": "停顿片刻再说"
+     },
+     "knowledge_boundary": [
+      "自己是陆敬渊二十年前遗弃的私生女，母亲因走私船沉没而亡，隐姓埋名回来复仇",
+      "知道自己在陆敬渊的白兰地中下了毒"
+     ],
+     "is_accomplice": false
+    }
+   ],
+   "relationship_map": {
+    "char_gu": {
+     "char_su": "老板-歌女",
+     "char_shen": "旧识",
+     "char_bai": "主客"
+    },
+    "char_shen": {
+     "char_gu": "旧识",
+     "char_su": "调查-被调查",
+     "char_bai": "生疏"
+    },
+    "char_bai": {
+     "char_gu": "主客",
+     "char_su": "故人之女",
+     "char_shen": "生疏"
+    },
+    "char_su": {
+     "char_gu": "老板",
+     "char_shen": "被调查",
+     "char_bai": "故人"
+    }
+   },
+   "balance_check": {
+    "verdict": "均衡",
+    "note": "四人均有动机，真凶嫌疑度不可一眼看穿"
+   }
+  },
+  "clues": {
+   "total_count": 12,
+   "key_clues": [
+    {
+     "id": "clue_k1",
+     "name": "验尸初勘",
+     "difficulty": "easy",
+     "act": 2,
+     "location": "海棠包厢 · 酒杯与酒样",
+     "description": "法医对死者陆敬渊血液与杯中残余白兰地的初步检验：两者均检出剧毒「醉仙」——一种气味似苦杏仁、微量即可致命的毒剂；且杯口被仔细擦拭过，指纹几乎全部被抹去。",
+     "points_to": "char_su",
+     "is_risk_point": false,
+     "independent_value": null
+    },
+    {
+     "id": "clue_k2",
+     "name": "撕碎的药房票据",
+     "difficulty": "medium",
+     "act": 2,
+     "location": "后台化妆间 · 废纸篓",
+     "description": "后台化妆间的废纸篓里翻出一张被撕成四片又拼回的购药凭证：两天前购买「醉仙」一瓶，签名栏被人撕去；纸背沾着一抹暗红的油彩，与后台演出服常用的油彩是同一款。",
+     "points_to": "char_su",
+     "is_risk_point": false,
+     "independent_value": null
+    },
+    {
+     "id": "clue_k3",
+     "name": "沉船旧案卷宗",
+     "difficulty": "medium",
+     "act": 4,
+     "location": "档案室 · 旧卷宗柜",
+     "description": "档案室里一宗二十年前「雾港沉船案」的卷宗被反复借阅，借阅登记上的化名笔迹与后台那张票据上的笔迹一致；卷宗夹层里掉出一张泛黄照片——船工与一名抱着婴儿的年轻女子站在码头，女子的眉眼与苏曼卿有七八分神似，照片背面写着一行小字：赠，雾港。",
+     "points_to": "char_su",
+     "is_risk_point": true,
+     "independent_value": null
+    },
+    {
+     "id": "clue_k4",
+     "name": "舞台排期与门房证言",
+     "difficulty": "hard",
+     "act": 4,
+     "location": "后台走廊 · 门房",
+     "description": "当晚节目单显示：苏曼卿只在 20:00 与 22:00 各登台一次，21:00-21:40 并不在台上；后台门房的老头回忆，21:30 前后看到一个穿墨绿旗袍的身影端着盖布托盘，从后台往二楼包厢方向去——墨绿旗袍，正是苏曼卿当晚的装束。",
+     "points_to": "char_su",
+     "is_risk_point": false,
+     "independent_value": null
+    }
+   ],
+   "misleading_clues": [
+    {
+     "id": "clue_m1",
+     "name": "挪动的账目",
+     "difficulty": "medium",
+     "act": 2,
+     "location": "顾知秋办公室 · 账本",
+     "description": "蓝雀夜总会的账目里有一笔卖酒收入对不上的缺口，金额恰好等于陆敬渊私人账户近日入账的一笔转账——顾知秋长期挪用公款，而这些钱最终都流向了陆敬渊。",
+     "points_to": "char_gu",
+     "is_risk_point": false,
+     "independent_value": "顾知秋被陆敬渊拿住把柄，有灭口动机"
+    },
+    {
+     "id": "clue_m2",
+     "name": "赌债欠条",
+     "difficulty": "hard",
+     "act": 4,
+     "location": "顾知秋办公室 · 保险箱",
+     "description": "顾知秋办公室的保险箱里锁着一张大额赌债欠条，落款是顾知秋本人；旁边还有一张字条，写着「下月连本带利，否则别怪我不讲情面」。",
+     "points_to": "char_gu",
+     "is_risk_point": false,
+     "independent_value": "顾知秋欠巨额赌债，经济上受制于人"
+    },
+    {
+     "id": "clue_m3",
+     "name": "受贿案卷宗与字条",
+     "difficulty": "medium",
+     "act": 2,
+     "location": "沈砚舟住所 · 抽屉",
+     "description": "沈砚舟住所抽屉里，一份被反复翻阅的受贿案卷宗关键证词前后矛盾——明显被人动过手脚；卷宗下压着一张当晚的便签，写着「陆敬渊，21:00，海棠」。",
+     "points_to": "char_shen",
+     "is_risk_point": false,
+     "independent_value": "沈砚舟被陆敬渊栽赃除名，一直私下调查陆"
+    },
+    {
+     "id": "clue_m4",
+     "name": "撕去标签的针剂",
+     "difficulty": "hard",
+     "act": 4,
+     "location": "沈砚舟住所 · 风衣内袋",
+     "description": "沈砚舟风衣内袋里贴身藏着一支撕去标签的针剂——实为心绞痛急救药，但他怕被误当凶器而藏得隐秘；风衣口袋还有半张当晚蓝雀夜总会的消费单据。",
+     "points_to": "char_shen",
+     "is_risk_point": false,
+     "independent_value": "沈砚舟形迹可疑（藏针剂），实为心脏病隐情"
+    },
+    {
+     "id": "clue_m5",
+     "name": "旧怀表",
+     "difficulty": "medium",
+     "act": 4,
+     "location": "白鹤龄休息室 · 贴身",
+     "description": "白鹤龄从不离身的旧怀表内侧刻着一个「陆」字，表壳有一道钝器砸痕；当晚宾客们都看到他在包厢门口与陆敬渊激烈争执数分钟后愤然离场。",
+     "points_to": "char_bai",
+     "is_risk_point": false,
+     "independent_value": "白鹤龄与陆敬渊有二十年旧怨，当晚又起冲突"
+    },
+    {
+     "id": "clue_m6",
+     "name": "码头股份让渡书",
+     "difficulty": "easy",
+     "act": 2,
+     "location": "码头 · 公证档案",
+     "description": "二十年前白鹤龄以极低价将名下码头股份转让给陆敬渊的让渡书，落款处留有大片水渍，像干涸的泪痕——他一直没放下这段旧怨。",
+     "points_to": "char_bai",
+     "is_risk_point": false,
+     "independent_value": "白鹤龄倾家荡产的旧怨"
+    }
+   ],
+   "neutral_clues": [
+    {
+     "id": "clue_n1",
+     "name": "当晚座次表",
+     "difficulty": "easy",
+     "act": 2,
+     "location": "一楼吧台",
+     "description": "一楼吧台的当晚座次表显示，几乎所有宾客都曾在陆敬渊离席时有机会接近二楼包厢。",
+     "points_to": null,
+     "is_risk_point": false,
+     "independent_value": null
+    },
+    {
+     "id": "clue_n2",
+     "name": "楼梯红酒渍",
+     "difficulty": "easy",
+     "act": 4,
+     "location": "楼梯转角",
+     "description": "楼梯转角有一大片干涸的红酒渍，恰好掩盖了通往二楼包厢方向的脚印痕迹。",
+     "points_to": null,
+     "is_risk_point": false,
+     "independent_value": null
+    }
+   ],
+   "clue_distribution_map": {
+    "海棠包厢": {
+     "act2": [
+      "clue_k1"
+     ]
+    },
+    "后台": {
+     "act2": [
+      "clue_k2"
+     ],
+     "act4": [
+      "clue_k4"
+     ]
+    },
+    "档案室": {
+     "act4": [
+      "clue_k3"
+     ]
+    },
+    "顾知秋办公室": {
+     "act2": [
+      "clue_m1"
+     ],
+     "act4": [
+      "clue_m2"
+     ]
+    },
+    "沈砚舟住所": {
+     "act2": [
+      "clue_m3"
+     ],
+     "act4": [
+      "clue_m4"
+     ]
+    },
+    "白鹤龄休息室": {
+     "act4": [
+      "clue_m5"
+     ]
+    },
+    "码头": {
+     "act2": [
+      "clue_m6"
+     ]
+    },
+    "一楼大厅": {
+     "act2": [
+      "clue_n1"
+     ],
+     "act4": [
+      "clue_n2"
+     ]
+    }
+   }
+  },
+  "act_structure": {
+   "acts": [
+    {
+     "name": "雾起时分",
+     "goal": "众人齐聚蓝雀，惊闻陆敬渊暴毙包厢",
+     "objective": "自我介绍，互相观察，交代各自的公开身份",
+     "notifications": [
+      "新隐私：请各自隐藏好自己的秘密",
+      "新目标：弄清陆敬渊的死因"
+     ]
+    },
+    {
+     "name": "夜雨藏踪",
+     "goal": "抽卡搜证，收集指向真相的线索",
+     "objective": "在夜总会各处搜寻，留意任何人的可疑举动",
+     "notifications": [
+      "新目标：搜证，寻找指向真相的线索",
+      "新秘密：小心你指间的证据"
+     ]
+    },
+    {
+     "name": "暗流私语",
+     "goal": "交换信息与私聊，试探虚实",
+     "objective": "与在场者交换线索，暗中调查每个人的秘密",
+     "notifications": [
+      "新目标：交换信息，试探他人",
+      "新隐私：私聊时将秘密说得半真半假"
+     ]
+    },
+    {
+     "name": "水落石出",
+     "goal": "再次搜证，补齐推理链",
+     "objective": "第二轮搜证，将零散线索拼成完整真相",
+     "notifications": [
+      "新目标：再次搜证，补齐推理链",
+      "新秘密：真凶已显，证据正在逼近"
+     ]
+    },
+    {
+     "name": "尘埃落定",
+     "goal": "最终收束，投票指认真凶",
+     "objective": "公聊对质后做出最终指认",
+     "notifications": [
+      "新目标：做出最终指认",
+      "新指示：投票时刻来临"
+     ]
+    }
+   ],
+   "act_switch_triggers": [
+    {
+     "from_act": 1,
+     "trigger": "所有玩家完成自我介绍与互问",
+     "to_act": 2
+    },
+    {
+     "from_act": 2,
+     "trigger": "玩家完成抽卡搜证",
+     "to_act": 3
+    },
+    {
+     "from_act": 3,
+     "trigger": "交换信息与私聊完成",
+     "to_act": 4
+    },
+    {
+     "from_act": 4,
+     "trigger": "玩家完成第二轮搜证",
+     "to_act": 5
+    },
+    {
+     "from_act": 5,
+     "trigger": "投票完成，进入揭晓",
+     "to_act": null
+    }
+   ],
+   "clue_release_plan": {
+    "act2": [
+     "clue_k1",
+     "clue_m1",
+     "clue_m3",
+     "clue_n1"
+    ],
+    "act3": [
+     "clue_k2",
+     "clue_m2",
+     "clue_m4",
+     "clue_n2"
+    ],
+    "act4": [
+     "clue_k3",
+     "clue_k4",
+     "clue_n3",
+     "clue_n4"
+    ],
+    "note": "线索均衡分布：真凶证据逐幕收紧，同时每个角色都有对应的秘密线索"
+   }
+  },
+  "review": {
+   "verdict": "PASS",
+   "critical_issues": [],
+   "weaknesses": [],
+   "fix_suggestions": []
+  },
+  "known_issues": false
+ }
+}
