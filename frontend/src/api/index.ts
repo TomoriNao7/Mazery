@@ -201,8 +201,6 @@ export const api = {
 
   getPrivateHistory: async (gameId: string, npcId: string) =>
     (await http.get(`/api/game/${gameId}/private-chat/${npcId}`)).data,
-  sendPrivate: async (gameId: string, npcId: string, content: string): Promise<PrivateSendResult> =>
-    (await http.post(`/api/game/${gameId}/private-chat/${npcId}/send`, { content })).data,
   endPrivate: async (gameId: string, npcId: string) =>
     (await http.post(`/api/game/${gameId}/private-chat/${npcId}/end`)).data,
 

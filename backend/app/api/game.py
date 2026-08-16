@@ -544,34 +544,48 @@ async def private_chat_send(game_id: str, npc_id: str,
         if not ok:
             raise HTTPException(status_code=400, detail=reason)
 
+    # 记录玩家消息并计数（流开始前完成，保证流失败时状态一致）
     await GameRepo(session).add_message(game_id, {
         "act": machine.current_act, "role": "player", "speaker_name": player_char_id,
         "content": req.content, "action_type": "private_chat",
     })
     sim = await _load_simulator(session, game_id, full)
-    reply, micro = await sim.generate_npc_reply(npc_id, req.content, get_llm_client())
-    await GameRepo(session).add_message(game_id, {
-        "act": machine.current_act, "role": f"character_{npc_id}", "speaker_name": npc_id,
-        "content": reply, "action_type": "private_chat",
-    })
-
     ok, count, ended = machine.record_private_message(player_char_id, 2)
-    transition = None
-    if ended and machine.should_advance():
-        transition = await _advance(session, game, machine, sim, full)
-    await _save_act_machine(session, game, machine)
-    await _save_npc_states(session, game_id, sim)
 
-    return {
-        "player_message": req.content,
-        "npc_reply": reply,
-        "micro_expression": micro,
-        "count": count,
-        "max": PRIVATE_CHAT_MAX_MESSAGES,
-        "remaining": max(0, PRIVATE_CHAT_MAX_MESSAGES - count),
-        "forced_end": ended,
-        "transition": transition,
-    }
+    async def event_stream():
+        reply_text = ""
+        try:
+            async for chunk in sim.generate_npc_reply_stream(
+                npc_id, req.content, get_llm_client()
+            ):
+                reply_text += chunk
+                yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.warning("私聊回复流式生成失败（已降级）: %s", e)
+            reply_text = "……（对方似乎不愿多说）"
+            yield f"data: {json.dumps({'chunk': reply_text}, ensure_ascii=False)}\n\n"
+        finally:
+            await GameRepo(session).add_message(game_id, {
+                "act": machine.current_act, "role": f"character_{npc_id}",
+                "speaker_name": npc_id, "content": reply_text,
+                "action_type": "private_chat",
+            })
+            transition = None
+            if ended and machine.should_advance():
+                transition = await _advance(session, game, machine, sim, full)
+            await _save_act_machine(session, game, machine)
+            await _save_npc_states(session, game_id, sim)
+            meta = {
+                "count": count,
+                "max": PRIVATE_CHAT_MAX_MESSAGES,
+                "remaining": max(0, PRIVATE_CHAT_MAX_MESSAGES - count),
+                "forced_end": ended,
+                "transition": transition,
+            }
+            yield f"data: {json.dumps({'meta': meta}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/{game_id}/private-chat/{npc_id}/end", summary="提前结束私聊")

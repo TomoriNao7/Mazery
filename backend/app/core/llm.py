@@ -20,8 +20,12 @@ logger = logging.getLogger(__name__)
 
 
 def _default_timeout() -> httpx.Timeout:
-    """连接超时设短（模型未启动时快速降级），读写超时留足（长生成不截断）。"""
-    return httpx.Timeout(connect=5.0, read=90.0, write=90.0, pool=10.0)
+    """连接超时设短（模型未启动时快速降级），读写超时留足（长生成不截断）。
+
+    读超时需覆盖剧本生成这类大 JSON 输出：思考型模型（如 qwen3-max 系列）
+    首 token 前可能思考数分钟，90s 会误判超时，故放宽到 600s。
+    """
+    return httpx.Timeout(connect=5.0, read=600.0, write=600.0, pool=10.0)
 
 
 def _extract_json(text: str) -> str:
@@ -103,13 +107,16 @@ class LlmClient:
             logger.warning("LLM 结构化输出解析失败，返回原始文本: %s", e)
             return text
 
-    async def stream(self, prompt: str, **kwargs) -> AsyncIterator[str]:
-        """流式调用，逐段产出文本。"""
+    async def stream(self, prompt: str,
+                     temperature: Optional[float] = None,
+                     max_tokens: Optional[int] = None,
+                     **kwargs) -> AsyncIterator[str]:
+        """流式调用，逐段产出文本。temperature / max_tokens 可覆盖默认值。"""
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
+            temperature=temperature if temperature is not None else self.temperature,
+            max_tokens=max_tokens if max_tokens is not None else self.max_tokens,
             stream=True,
             **kwargs,
         )

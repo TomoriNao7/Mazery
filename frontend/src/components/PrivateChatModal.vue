@@ -39,19 +39,24 @@ async function send() {
   const local = text
   input.value = ''
   messages.value.push({ role: 'player', speaker_name: game.playerCharId, content: local })
+  const replyMsg = {
+    role: `character_${props.npcId}`,
+    speaker_name: props.npcId,
+    content: '',
+    action_type: 'private_chat',
+  }
+  messages.value.push(replyMsg)
   try {
-    const res = await game.sendPrivate(props.npcId, local)
-    messages.value.push({
-      role: `character_${props.npcId}`,
-      speaker_name: props.npcId,
-      content: res.npc_reply,
-      action_type: 'private_chat',
+    const res = await game.sendPrivate(props.npcId, local, (t) => {
+      replyMsg.content += t
     })
+    if (!res.npc_reply) replyMsg.content = '……（对方似乎不愿多说）'
     if (res.forced_end) {
       setTimeout(() => emit('ended'), 600)
     }
   } catch (e) {
-    messages.value.push({ role: 'player', speaker_name: game.playerCharId, content: local })
+    // 发送失败：移除空回复气泡，恢复输入
+    messages.value.pop()
     input.value = local
   } finally {
     sending.value = false

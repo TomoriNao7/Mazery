@@ -9,7 +9,7 @@ import api, {
   type DrawCards,
   type PrivateSendResult,
 } from '../api'
-import { streamAction, type ActionPayload } from '../api/sse'
+import { streamAction, streamPrivateChat, type ActionPayload, type PrivateChatMeta } from '../api/sse'
 
 export const useGameStore = defineStore('game', {
   state: () => ({
@@ -184,10 +184,46 @@ export const useGameStore = defineStore('game', {
       await this.refresh()
       return t
     },
-    async sendPrivate(npcId: string, content: string): Promise<PrivateSendResult> {
-      const res = await api.sendPrivate(this.gameId, npcId, content)
+    /** 私聊发送（SSE 流式）：onChunk 逐段回调，返回最终计数/强制结束/转场。 */
+    async sendPrivate(
+      npcId: string,
+      content: string,
+      onChunk?: (t: string) => void,
+    ): Promise<PrivateSendResult> {
+      let reply = ''
+      let meta: PrivateChatMeta = { count: 0, max: 0, remaining: 0, forced_end: false, transition: null }
+      const onMeta = (m: PrivateChatMeta) => {
+        meta = m
+        if (m.transition) {
+          this.lastTransition = m.transition
+          if (m.transition.stage) this.stage = m.transition.stage
+          if (m.transition.to_act) this.currentAct = m.transition.to_act
+          if (m.transition.notifications?.length) this.pendingNotifications = m.transition.notifications
+        }
+      }
+      const onError = (m: string) => {
+        this.error = m
+      }
+      await streamPrivateChat(
+        this.gameId, npcId, content,
+        (t) => {
+          reply += t
+          onChunk?.(t)
+        },
+        onMeta,
+        () => {},
+        onError,
+      )
       await this.refresh()
-      return res
+      return {
+        player_message: content,
+        npc_reply: reply,
+        count: meta.count,
+        max: meta.max,
+        remaining: meta.remaining,
+        forced_end: meta.forced_end,
+        transition: meta.transition,
+      }
     },
     async endPrivate(npcId: string) {
       const res = await api.endPrivate(this.gameId, npcId)

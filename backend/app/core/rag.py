@@ -6,22 +6,14 @@ import hashlib
 import json
 import math
 import os
+import threading
 import time
 from typing import List, Dict, Any, Optional, Tuple, Set, Callable
 from pathlib import Path
 from dataclasses import dataclass, field
 
-# 第三方库
-import numpy as np
-import jieba
-from rank_bm25 import BM25Okapi
-import faiss
-from sentence_transformers import SentenceTransformer, CrossEncoder
-from openai import AsyncOpenAI
-
-# 本地模块
+# 本地模块（config 依赖仅为标准库，须最先加载以设置 HF 环境变量）
 from backend.app.config import RAG_CONFIG, LLM_CONFIG, DB_DIR
-from backend.app.data.loader import KnowledgeLoader, Document
 
 
 def _models_cached() -> bool:
@@ -38,9 +30,23 @@ def _models_cached() -> bool:
     return True
 
 
+# 必须在 import 任何会引入 huggingface_hub 的库（如 sentence_transformers）之前设置：
+# huggingface_hub 在 import 时把 HF_ENDPOINT 冻结为常量，事后改环境变量无效。
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 if _models_cached():
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
+# 第三方库
+import numpy as np
+import jieba
+from rank_bm25 import BM25Okapi
+import faiss
+from sentence_transformers import SentenceTransformer, CrossEncoder
+from openai import AsyncOpenAI
+
+# 本地模块
+from backend.app.data.loader import KnowledgeLoader, Document
 
 
 # ==================== 配置与常量 ====================
@@ -62,6 +68,9 @@ CHARS_PER_TOKEN = RAG_CONFIG["chars_per_token"]
 
 # Reranker 最大输入长度（token）：块长 600 字≈400 token，1024 给 query 留足余量
 RERANKER_MAX_LENGTH = RAG_CONFIG["reranker_max_length"]
+
+# Embedding / Reranker 首次联网下载超时（秒）：超过直接降级，避免阻塞首次生成
+MODEL_LOAD_TIMEOUT = RAG_CONFIG["model_load_timeout"]
 
 # Query 改写最多额外生成的查询数（总查询数 = 1 原查询 + 该值，控制召回成本）
 MAX_REWRITE_QUERIES = RAG_CONFIG["max_rewrite_queries"]
@@ -90,6 +99,31 @@ STOPWORDS = frozenset({
     "没有", "不是", "不会", "以及", "呢", "吗", "吧", "啊", "呀", "哦", "嗯",
     "自己", "时候", "可能", "起来", "出来", "这里", "那里", "的话",
 })
+
+
+def _load_model_with_timeout(factory: Callable[[], Any], timeout: float = MODEL_LOAD_TIMEOUT) -> Any:
+    """在守护线程中加载模型，超过 timeout 秒未完成直接抛 TimeoutError（触发上层降级）。
+
+    模型首次联网下载可能很慢（国内访问 HF 慢），不能阻塞首次剧本生成的请求。
+    超时后后台线程仍在继续下载，完成后写入 HF 缓存，下次启动即可离线秒载。
+    """
+    box: Dict[str, Any] = {}
+
+    def _run() -> None:
+        try:
+            box["model"] = factory()
+            box["ok"] = True
+        except Exception as e:  # noqa: BLE001
+            box["error"] = e
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        raise TimeoutError(f"模型加载超过 {timeout:.0f}s（含联网下载），降级跳过语义检索")
+    if box.get("ok"):
+        return box["model"]
+    raise box["error"]
 
 
 @dataclass
@@ -138,27 +172,28 @@ class HybridRetriever:
 
         # 3. 构建索引（优先加载落盘缓存，避免每次启动重复嵌入知识库）
         self._build_bm25_index()
-        if not self._try_load_index_cache(embedding_model):
-            try:
+        try:
+            if not self._try_load_index_cache(embedding_model):
                 self._build_faiss_index(embedding_model)
                 self._save_index_cache()
-            except Exception as e:
-                # TRD 10.6：Embedding/FAISS 不可用时降级为仅 BM25 + 标签检索
-                print(f"[RAG] Embedding/FAISS 构建失败，降级为仅 BM25: {e}")
-                self.faiss_available = False
-                self.embedder = None
-                self.faiss_index = None
-                self.faiss_id_map = {}
-                self._embeddings = None
-                self._emb_dim = 0
-                self._doc_row = {}
+        except Exception as e:
+            # TRD 10.6：Embedding/FAISS 不可用或下载超时时，降级为仅 BM25 + 标签检索
+            print(f"[RAG] Embedding/FAISS 构建失败，降级为仅 BM25: {e}")
+            self.faiss_available = False
+            self.embedder = None
+            self.faiss_index = None
+            self.faiss_id_map = {}
+            self._embeddings = None
+            self._emb_dim = 0
+            self._doc_row = {}
 
         # 4. 加载 Reranker（可选）
         self.use_reranker = use_reranker
         self.reranker = None
         if use_reranker:
             try:
-                self.reranker = CrossEncoder(reranker_model, max_length=RERANKER_MAX_LENGTH)
+                self.reranker = _load_model_with_timeout(
+                    lambda: CrossEncoder(reranker_model, max_length=RERANKER_MAX_LENGTH))
             except Exception as e:
                 print(f"[RAG] Reranker 加载失败，将跳过精排: {e}")
                 self.use_reranker = False
@@ -214,7 +249,8 @@ class HybridRetriever:
             if meta.get("fingerprint") != self.loader.knowledge_fingerprint():
                 return False
 
-            self.embedder = SentenceTransformer(model_name, device="cpu")
+            self.embedder = _load_model_with_timeout(
+                lambda: SentenceTransformer(model_name, device="cpu"))
             self.embedder_model = model_name
             self.faiss_index = faiss.read_index(str(index_file))
             self._embeddings = np.load(emb_file)
@@ -225,6 +261,9 @@ class HybridRetriever:
             self.faiss_available = True
             print(f"[RAG] 从缓存加载 FAISS 索引（{self.faiss_index.ntotal} 个向量）")
             return True
+        except TimeoutError:
+            # 下载超时：直接交给上层降级，不再走重新构建（避免二次超时）
+            raise
         except Exception as e:
             print(f"[RAG] 索引缓存加载失败，将重新构建: {e}")
             return False
@@ -259,7 +298,8 @@ class HybridRetriever:
         """构建 FAISS 向量索引"""
         print(f"[RAG] 加载 Embedding 模型: {model_name}")
         self.embedder_model = model_name  # 保存模型名，供 reload() 重建索引使用
-        self.embedder = SentenceTransformer(model_name, device="cpu")
+        self.embedder = _load_model_with_timeout(
+            lambda: SentenceTransformer(model_name, device="cpu"))
         dim = self.embedder.get_sentence_embedding_dimension()
 
         # 使用内积索引（余弦相似度需归一化）

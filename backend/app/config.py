@@ -55,6 +55,8 @@ RAG_CONFIG = {
     "reranker_model": os.getenv("RAG_RERANKER_MODEL", "BAAI/bge-reranker-base"),
     # Reranker 最大输入长度（token）
     "reranker_max_length": int(os.getenv("RAG_RERANKER_MAX_LENGTH", "1024")),
+    # 模型首次联网下载超时（秒）：超过则降级为仅 BM25 + 标签检索，不阻塞首次生成
+    "model_load_timeout": int(os.getenv("RAG_MODEL_LOAD_TIMEOUT", "300")),
     # RRF 融合常数
     "rrf_k": int(os.getenv("RAG_RRF_K", "60")),
     # 检索缓存过期时间（秒）

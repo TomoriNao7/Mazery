@@ -111,7 +111,7 @@ async def process_player_action(action: str,
         "不要输出 JSON、不要输出字段名、不要输出 schema、不要加代码块。"
         "如果是你的回合，直接说话即可。"
     )
-    async for chunk in get_llm_client().stream(prompt):
+    async for chunk in get_llm_client().stream(prompt, max_tokens=2000):
         yield chunk
 
 
@@ -138,7 +138,7 @@ async def reveal_truth(game) -> Any:
         player_vote=_get(game, None, "player_vote", None),
         truth=truth,
     )
-    return await get_llm_client().call(prompt, schema=CaseReveal)
+    return await get_llm_client().call(prompt, schema=CaseReveal, max_tokens=3000)
 
 
 async def generate_transition(game_state,
@@ -167,7 +167,7 @@ async def generate_transition(game_state,
     )
     narration = f"—— 第{act}幕 · {stage_label or ''} ——"
     try:
-        text = await get_llm_client().call(prompt)
+        text = await get_llm_client().call(prompt, max_tokens=600)
         if text and str(text).strip():
             narration = str(text).strip()
     except Exception as e:

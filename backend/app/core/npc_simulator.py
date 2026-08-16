@@ -6,8 +6,11 @@
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 # 私聊动机优先级（TRD 6.3：每幕选 2-3 组，按优先级排序）
 MOTIVE_PRIORITY = {
@@ -197,7 +200,7 @@ class NpcSimulator:
             game_state=game_state,
             npc_contexts=self.context_cards(),
         )
-        result = await llm.call(prompt, schema=PrivateChatBatch)
+        result = await llm.call(prompt, schema=PrivateChatBatch, max_tokens=1500)
 
         chats = result.chats if hasattr(result, "chats") else []
         for chat in chats:
@@ -242,7 +245,7 @@ class NpcSimulator:
             truth=truth,
             npc_contexts=self.context_cards(),
         )
-        result = await llm.call(prompt, schema=NpcStrategyBatch)
+        result = await llm.call(prompt, schema=NpcStrategyBatch, max_tokens=800)
         for item in getattr(result, "strategies", []):
             st = self.states.get(getattr(item, "npc_id", ""))
             if st:
@@ -302,19 +305,19 @@ class NpcSimulator:
 
     # ---------- 私聊：单个 NPC 回复玩家（PRD v0.2.0 第三/五幕） ----------
 
-    async def generate_npc_reply(self, npc_id: str, message: str,
-                                 llm) -> Tuple[str, Optional[str]]:
-        """生成单个 NPC 对玩家私聊消息的回复。
+    async def generate_npc_reply_stream(self, npc_id: str, message: str,
+                                        llm, max_tokens: int = 300) -> AsyncIterator[str]:
+        """流式生成单个 NPC 对玩家私聊消息的回复（纯文本，逐段产出）。
 
-        注入该 NPC 完整上下文（含自身私有知识/秘密/真相，但受凶手硬约束
-        character_actor skill 约束，绝不承认自己是凶手）。返回 (content, micro_expression)。
-        失败时返回兜底话术。
+        注入该 NPC 完整上下文（含自身私有知识/秘密/真相，但受 character_actor
+        硬约束，绝不承认自己是凶手）。要求直接输出回复文本（不输出 JSON），
+        失败时产出兜底话术。
         """
         st = self.states.get(npc_id)
         if not st:
-            return "……", None
+            yield "……"
+            return
         try:
-            from backend.app.core.schemas import NpcResponse
             from backend.app.core.skill_manager import get_skill_manager
             sm = get_skill_manager()
             prompt = sm.build_system_prompt(
@@ -324,13 +327,15 @@ class NpcSimulator:
                 player_message=message,
                 private_chat=True,
             )
-            result = await llm.call(prompt, schema=NpcResponse)
-            content = getattr(result, "content", None)
-            if not content:
-                return "……（对方似乎不愿多说）", None
-            return content, getattr(result, "micro_expression", None)
-        except Exception:
-            return "……（对方似乎不愿多说）", None
+            prompt += (
+                "\n\n请直接输出该 NPC 的回复（自然中文，第一人称，约 2-4 句），"
+                "不要输出 JSON、不要输出字段名、不要加代码块。"
+            )
+            async for chunk in llm.stream(prompt, max_tokens=max_tokens):
+                yield chunk
+        except Exception as e:
+            logger.warning("NPC 私聊回复流式生成失败（已降级）: %s", e)
+            yield "……（对方似乎不愿多说）"
 
     # ---------- 投票：全角色投票（PRD v0.2.0 第五幕） ----------
 
@@ -351,7 +356,7 @@ class NpcSimulator:
                 current_act=5,
                 npc_contexts=self.context_cards(),
             )
-            result = await llm.call(prompt, schema=NpcVoteBatch)
+            result = await llm.call(prompt, schema=NpcVoteBatch, max_tokens=800)
             for item in getattr(result, "votes", []):
                 votes[item.npc_id] = item.target_id
         except Exception:

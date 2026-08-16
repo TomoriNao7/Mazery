@@ -18,7 +18,7 @@ class ReviewerAgent(BaseAgent):
     name = "reviewer"
     output_key = "review"
     skill_names = ["skeptical_reviewer"]
-    max_tokens = 5000
+    max_tokens = 2500
 
     def validate(self, data: Any) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})
