@@ -59,8 +59,10 @@ function play(id: string) {
     <ScriptDetailModal
       :show="detailShow"
       :script-id="detailId"
+      can-edit
       @close="detailShow = false"
       @play="play"
+      @updated="load"
     />
   </section>
 </template>

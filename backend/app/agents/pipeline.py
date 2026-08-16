@@ -185,6 +185,24 @@ class ScriptGenerationPipeline:
             "review": state.get("review"),
             "known_issues": state.get("known_issues", False),
         }
+
+        # 硬校验：核心内容缺失视为生成失败，不落库。
+        # 否则会把"角色为空"的坏剧本当成功保存，前端选角页因此空白。
+        missing = [
+            name for name, value in (
+                ("案件核心 case_core", state.get("case_core")),
+                ("角色 characters", state.get("characters")),
+                ("线索 clues", state.get("clues")),
+                ("分幕 act_structure", state.get("act_structure")),
+            ) if not value
+        ]
+        if missing:
+            raise RuntimeError(
+                "剧本生成失败：以下核心内容未生成成功 —— "
+                + "、".join(missing)
+                + "。请确认 LLM 服务可用且额度充足后重试。"
+            )
+
         if self.session is not None:
             script = await ScriptRepo(self.session).create({
                 "title": final_script["title"],

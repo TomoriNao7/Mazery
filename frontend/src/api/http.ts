@@ -5,7 +5,8 @@ export const API_BASE: string =
 
 export const http = axios.create({
   baseURL: API_BASE,
-  timeout: 120000,
+  // 剧本生成是多次串行 LLM 调用，可能数分钟；超时放宽到 10 分钟避免中途掐断
+  timeout: 600000,
   headers: { 'Content-Type': 'application/json' },
 })
 

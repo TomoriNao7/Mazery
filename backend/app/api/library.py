@@ -10,9 +10,10 @@
 
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -116,6 +117,29 @@ async def save_script(script_id: str, session: AsyncSession = Depends(get_sessio
     was_saved = script.is_saved
     await ScriptRepo(session).set_saved(script_id, 1)
     return {"ok": True, "already_saved": bool(was_saved)}
+
+
+class ScriptUpdateRequest(BaseModel):
+    """剧本信息编辑请求：只允许更新展示性元信息，不接受角色/线索等结构字段。"""
+
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    scene: Optional[str] = None
+    category: Optional[str] = None
+
+
+@router.post("/script/{script_id}/update", summary="更新剧本信息（标题/简介等）")
+async def update_script(script_id: str, req: ScriptUpdateRequest,
+                        session: AsyncSession = Depends(get_session)):
+    script = await ScriptRepo(session).get(script_id, load_relation=False)
+    if not script:
+        raise HTTPException(status_code=404, detail="剧本不存在")
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+    if updates:
+        script = await ScriptRepo(session).update(script_id, updates)
+        if not script:
+            raise HTTPException(status_code=404, detail="剧本不存在")
+    return _script_card(script)
 
 
 # ---------- 剧本详情 & 人物选择 ----------

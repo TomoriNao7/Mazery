@@ -165,6 +165,8 @@ export const api = {
 
   getScriptInfo: async (id: string): Promise<ScriptCard> =>
     (await http.get(`/api/script/${id}/info`)).data,
+  updateScript: async (id: string, payload: Record<string, unknown>): Promise<ScriptCard> =>
+    (await http.post(`/api/script/${id}/update`, payload)).data,
   getScriptCharacters: async (id: string): Promise<{ script_id: string; title: string; characters: CharL1[] }> =>
     (await http.get(`/api/script/${id}/characters`)).data,
   getCharacterDetail: async (id: string, cid: string): Promise<CharL2> =>
