@@ -4,8 +4,9 @@ withDefaults(
     show: boolean
     width?: string
     title?: string
+    centerTitle?: boolean
   }>(),
-  { width: '480px', title: '' },
+  { width: '480px', title: '', centerTitle: false },
 )
 const emit = defineEmits<{ (e: 'close'): void }>()
 </script>
@@ -15,7 +16,7 @@ const emit = defineEmits<{ (e: 'close'): void }>()
     <Transition name="fade">
       <div v-if="show" class="modal-mask" @click.self="emit('close')">
         <div class="modal-body" :style="{ width, maxWidth: '92vw' }">
-          <div v-if="title" class="modal-head">
+          <div v-if="title" class="modal-head" :class="{ center: centerTitle }">
             <span class="display gold" style="font-size: 18px">{{ title }}</span>
             <button class="modal-x" @click="emit('close')">✕</button>
           </div>
@@ -41,6 +42,17 @@ const emit = defineEmits<{ (e: 'close'): void }>()
   justify-content: space-between;
   align-items: center;
   margin-bottom: 14px;
+  position: relative;
+}
+.modal-head.center {
+  justify-content: center;
+  padding: 0 34px;
+}
+.modal-head.center .modal-x {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .modal-x {
   background: none;

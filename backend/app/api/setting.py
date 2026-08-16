@@ -6,7 +6,6 @@
 """
 
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -107,22 +106,18 @@ def _mask(key: str) -> str:
 async def apply_stored_llm_config(session: AsyncSession) -> None:
     """启动时把设置页保存的 LLM 配置应用到运行时（含解密 API Key）。
 
-    使设置页保存的模型/BaseURL/Key 在服务重启后仍生效，无需重填。
+    设置页保存的模型/BaseURL/Key 是唯一生效来源，服务重启后仍生效；
+    未保存过配置时才回退到 config.LLM_CONFIG 的默认值。
     """
     from backend.app.db.repository import SettingsRepo
     stored = await SettingsRepo(session).get("llm_config", {}) or {}
     if not stored:
         return
-    # 显式设置的环境变量（启动时）优先于数据库保存值
-    if "LLM_MODEL" not in os.environ:
-        LLM_CONFIG["model"] = stored.get("model", LLM_CONFIG["model"])
-    if "LLM_BASE_URL" not in os.environ:
-        LLM_CONFIG["base_url"] = stored.get("base_url", LLM_CONFIG["base_url"])
-    if "LLM_TEMPERATURE" not in os.environ:
-        LLM_CONFIG["temperature"] = stored.get("temperature", LLM_CONFIG["temperature"])
-    if "LLM_MAX_TOKENS" not in os.environ:
-        LLM_CONFIG["max_tokens"] = stored.get("max_tokens", LLM_CONFIG["max_tokens"])
-    if "LLM_API_KEY" not in os.environ and stored.get("api_key_encrypted"):
+    LLM_CONFIG["model"] = stored.get("model", LLM_CONFIG["model"])
+    LLM_CONFIG["base_url"] = stored.get("base_url", LLM_CONFIG["base_url"])
+    LLM_CONFIG["temperature"] = stored.get("temperature", LLM_CONFIG["temperature"])
+    LLM_CONFIG["max_tokens"] = stored.get("max_tokens", LLM_CONFIG["max_tokens"])
+    if stored.get("api_key_encrypted"):
         key = _decrypt(stored["api_key_encrypted"])
         if key:
             LLM_CONFIG["api_key"] = key

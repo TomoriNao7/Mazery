@@ -127,8 +127,11 @@ class BaseAgent:
         return await self.llm.call(prompt, schema=self.output_schema,
                                    max_tokens=self.max_tokens)
 
-    def validate(self, data: Any) -> List[str]:
-        """校验输出，返回错误列表。子类可覆盖；默认视为通过。"""
+    def validate(self, data: Any, state: Optional[Dict[str, Any]] = None) -> List[str]:
+        """校验输出，返回错误列表。子类可覆盖；默认视为通过。
+
+        state 为共享 AgentState，供跨字段校验（如角色知识边界 ↔ 真凶、线索 ↔ 真凶）。
+        """
         return []
 
     # ---------- LangGraph 节点 ----------
@@ -146,9 +149,11 @@ class BaseAgent:
                 logger.warning("[%s] 第 %d 次 LLM 调用失败: %s", self.name, attempt, e)
                 data = None
 
-            errors = self.validate(data) if data is not None else [
-                "LLM 调用失败或返回为空"
-            ]
+            errors = (
+                self.validate(data, state=state)
+                if data is not None and not isinstance(data, str)
+                else ["LLM 调用失败或返回为空"]
+            )
             if not errors:
                 return {self.output_key: self._to_plain(data), "warnings": warnings}
 

@@ -6,7 +6,7 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 </script>
 
 <template>
-  <AppModal :show="show" width="400px" title="剧情更新">
+  <AppModal :show="show" width="400px" title="幕间 · 行动指示" center-title>
     <div class="ntf">
       <div class="ntf-orn">✦</div>
       <ul class="ntf-list">

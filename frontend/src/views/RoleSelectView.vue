@@ -19,6 +19,7 @@ const detail = ref<CharL2 | null>(null)
 const detailLoading = ref(false)
 const selectedId = ref('')
 const starting = ref(false)
+const phase = ref<'confirm' | 'ready'>('confirm')
 
 async function load() {
   loading.value = true
@@ -37,6 +38,7 @@ onMounted(load)
 
 async function pick(c: CharL1) {
   selectedId.value = c.id
+  phase.value = 'confirm'
   detailShow.value = true
   detailLoading.value = true
   detail.value = null
@@ -47,6 +49,15 @@ async function pick(c: CharL1) {
   } finally {
     detailLoading.value = false
   }
+}
+
+function confirmRole() {
+  if (detail.value) phase.value = 'ready'
+}
+
+/** 弹窗关闭：确定角色后锁定，只能点「开始游戏」进入。 */
+function onClose() {
+  if (phase.value === 'confirm') detailShow.value = false
 }
 
 async function start() {
@@ -62,18 +73,6 @@ async function start() {
     starting.value = false
   }
 }
-
-function describe(v: unknown): string {
-  if (v == null) return '未知'
-  if (typeof v === 'string') return v
-  if (typeof v === 'object') {
-    const parts = Object.entries(v as Record<string, unknown>).map(([k, val]) =>
-      typeof val === 'string' || typeof val === 'number' ? `${k}: ${val}` : k,
-    )
-    return parts.join('；')
-  }
-  return String(v)
-}
 </script>
 
 <template>
@@ -85,7 +84,7 @@ function describe(v: unknown): string {
     </header>
 
     <div v-if="loading" class="char-grid">
-      <div v-for="i in 4" :key="i" class="skeleton" style="height: 130px"></div>
+      <div v-for="i in 4" :key="i" class="skeleton" style="height: 130px; width: 190px"></div>
     </div>
     <div v-else-if="error" class="error">
       <p class="muted">{{ error }}</p>
@@ -110,7 +109,7 @@ function describe(v: unknown): string {
       </button>
     </div>
 
-    <AppModal :show="detailShow" width="480px" @close="detailShow = false">
+    <AppModal :show="detailShow" width="480px" @close="onClose">
       <div v-if="detailLoading" class="p20">
         <div class="skeleton" style="height: 20px; width: 50%"></div>
         <div class="skeleton" style="height: 13px; width: 100%; margin-top: 16px"></div>
@@ -125,54 +124,109 @@ function describe(v: unknown): string {
           </div>
         </div>
 
-        <div v-if="detail.appearance" class="cd-block">
-          <div class="cd-label dim">外貌</div>
-          <p class="cd-text">{{ detail.appearance }}</p>
-        </div>
-        <div v-if="detail.background" class="cd-block">
-          <div class="cd-label dim">身份背景</div>
-          <p class="cd-text">{{ detail.background }}</p>
-        </div>
+        <!-- 第一步：仅公开信息 -->
+        <template v-if="phase === 'confirm'">
+          <div v-if="detail.appearance" class="cd-block">
+            <div class="cd-label dim">外貌</div>
+            <p class="cd-text">{{ detail.appearance }}</p>
+          </div>
+          <div v-if="detail.personality" class="cd-block">
+            <div class="cd-label dim">个性</div>
+            <p class="cd-text">{{ detail.personality }}</p>
+          </div>
+          <div v-if="detail.background" class="cd-block">
+            <div class="cd-label dim">身份背景</div>
+            <p class="cd-text">{{ detail.background }}</p>
+          </div>
+          <p class="phase-hint dim">确认后，你将看到该角色的完整角色卡——人物关系、当前目标与需要隐藏的秘密。</p>
+          <div class="cd-actions">
+            <button class="btn btn-ghost" @click="detailShow = false">再看看</button>
+            <button class="btn btn-primary" @click="confirmRole">确定选择该角色</button>
+          </div>
+        </template>
 
-        <div v-if="detail.relationships?.length" class="cd-block">
-          <div class="cd-label dim">人物关系</div>
-          <ul class="cd-rels">
-            <li v-for="(r, i) in detail.relationships" :key="i" class="cd-text">
-              <span class="gold">{{ (r as any).name || (r as any).target || '他人' }}</span>
-              <span v-if="(r as any).relation">（{{ (r as any).relation }}）</span>
-              <span v-if="(r as any).description">：{{ (r as any).description }}</span>
-            </li>
-          </ul>
-        </div>
+        <!-- 第二步：角色卡（关系 / 目标 / 秘密 / 说话风格 / 信息边界） -->
+        <template v-else>
+          <div v-if="detail.is_murderer" class="murderer-banner">
+            <div class="mb-title">你是真凶</div>
+            <p class="mb-text">{{ detail.murderer_notice }}</p>
+          </div>
 
-        <div class="cd-block">
-          <div class="cd-label dim">当前目标</div>
-          <p class="cd-text">{{ describe(detail.goal) }}</p>
-        </div>
-        <div class="cd-block">
-          <div class="cd-label dim">需要隐藏的部分</div>
-          <ul class="cd-rels">
-            <li v-for="(s, i) in detail.secrets" :key="i" class="cd-text">{{ describe(s) }}</li>
-          </ul>
-        </div>
+          <div v-if="detail.relationships?.length" class="cd-block">
+            <div class="cd-label dim">人物关系</div>
+            <ul class="cd-rels">
+              <li v-for="(r, i) in detail.relationships" :key="i" class="cd-text">
+                <span class="gold">{{ r.name || '他人' }}</span>
+                <span v-if="r.relation">（{{ r.relation }}）</span>
+                <span v-if="r.description">：{{ r.description }}</span>
+              </li>
+            </ul>
+          </div>
 
-        <div class="cd-actions">
-          <button class="btn btn-ghost" @click="detailShow = false">再看看</button>
-          <button class="btn btn-primary" :disabled="starting" @click="start">
-            {{ starting ? '进入中…' : '继续 · 以该角色开始游戏' }}
-          </button>
-        </div>
+          <div v-if="detail.goal" class="cd-block">
+            <div class="cd-label dim">当前目标</div>
+            <p class="cd-text">{{ detail.goal }}</p>
+          </div>
+
+          <div v-if="detail.secrets?.length" class="cd-block">
+            <div class="cd-label dim">需要隐藏的部分</div>
+            <ul class="cd-rels">
+              <li v-for="(s, i) in detail.secrets" :key="i" class="cd-text">{{ s }}</li>
+            </ul>
+          </div>
+
+          <div v-if="detail.speaking_style" class="cd-block">
+            <div class="cd-label dim">说话风格</div>
+            <p class="cd-text">{{ detail.speaking_style }}</p>
+          </div>
+
+          <div v-if="detail.knowledge_boundary?.length" class="cd-block">
+            <div class="cd-label dim">信息边界</div>
+            <ul class="cd-rels">
+              <li v-for="(kb, i) in detail.knowledge_boundary" :key="i" class="cd-text">{{ kb }}</li>
+            </ul>
+          </div>
+
+          <div v-if="detail.own_clues?.length" class="cd-block">
+            <div class="cd-label dim">可能指向你的线索</div>
+            <p class="own-clue-hint">开局前先了解这些线索，一旦有人当众出示，你能从容应对。</p>
+            <ul class="own-clues">
+              <li v-for="cl in detail.own_clues" :key="cl.id" class="own-clue">
+                <div class="oc-name gold">{{ cl.name }}</div>
+                <div class="oc-desc cd-text">{{ cl.description }}</div>
+                <div v-if="cl.location" class="oc-loc dim">📍 发现于：{{ cl.location }}</div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="cd-actions ready-only">
+            <button class="btn btn-primary" :disabled="starting" @click="start">
+              {{ starting ? '进入中…' : '开始游戏' }}
+            </button>
+          </div>
+        </template>
       </div>
     </AppModal>
   </section>
 </template>
 
 <style scoped>
+.page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 .page-head {
-  margin-bottom: 26px;
+  padding: 22px 24px 0;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.page-head .back-btn {
+  display: block;
+  margin: 0 auto 10px;
 }
 .page-head p {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   font-size: 13px;
 }
 .back-btn {
@@ -188,22 +242,35 @@ function describe(v: unknown): string {
   color: var(--accent-strong);
 }
 .char-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 18px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  gap: 22px;
+  padding: 10px 24px 40px;
 }
 .char-card {
-  padding: 20px;
+  width: 200px;
+  height: 196px;
+  padding: 22px 18px;
   text-align: center;
   border: none;
   color: var(--text);
   cursor: pointer;
   animation: fadeUp 0.5s var(--ease) both;
   background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
 .char-avatar {
   width: 54px;
   height: 54px;
+  flex-shrink: 0;
   margin: 0 auto 12px;
   border-radius: 50%;
   display: flex;
@@ -224,11 +291,18 @@ function describe(v: unknown): string {
   display: flex;
   gap: 6px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 .char-person {
   font-size: 12px;
-  margin-top: 8px;
-  min-height: 16px;
+  margin-top: 10px;
+  min-height: 34px;
+  line-height: 1.55;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .error {
   text-align: center;
@@ -289,10 +363,69 @@ function describe(v: unknown): string {
   font-size: 13px;
   line-height: 1.8;
 }
+.murderer-banner {
+  border: 1px solid rgba(220, 60, 60, 0.5);
+  background: rgba(220, 60, 60, 0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.mb-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: #e05a5a;
+  letter-spacing: 0.08em;
+}
+.mb-text {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.own-clue-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.own-clues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.own-clue {
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--surface-2);
+}
+.oc-name {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.oc-desc {
+  font-size: 12.5px;
+}
+.oc-loc {
+  margin-top: 5px;
+  font-size: 11.5px;
+}
+.phase-hint {
+  margin: 18px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
 .cd-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   margin-top: 26px;
+}
+.ready-only {
+  justify-content: center;
+}
+.ready-only .btn {
+  min-width: 180px;
 }
 </style>

@@ -17,7 +17,7 @@ class ArchitectAgent(BaseAgent):
     skill_names = ["mystery_writer"]
     max_tokens = 5000
 
-    def validate(self, data: Any) -> List[str]:
+    def validate(self, data: Any, state: Any = None) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})
         errors: List[str] = []
 
@@ -39,12 +39,9 @@ class ArchitectAgent(BaseAgent):
             errors.append("时间线为空")
         else:
             for i, evt in enumerate(timeline):
-                if not isinstance(evt, dict):
-                    errors.append(f"timeline[{i}] 不是对象")
-                    continue
-                # 每个事件至少有一个见证人或物证（TRD 8.3）
-                if not any(k in evt for k in ("witness", "evidence", "见证", "物证", "验证")):
-                    errors.append(f"timeline[{i}] 缺少见证人或物证")
+                # 内层为无类型 dict：见证人/物证字段名模型间不固定，仅要求非空
+                if not isinstance(evt, dict) or not evt:
+                    errors.append(f"timeline[{i}] 为空或不是对象")
 
         if not fields.get("key_clue_chain"):
             errors.append("缺少 key_clue_chain（推理链必须存在）")

@@ -18,8 +18,7 @@ const router = useRouter()
           开始游戏
         </button>
         <button class="btn btn-ghost home-settings" @click="router.push('/settings')">设置</button>
-      </div>
-    </div>
+      </div>    </div>
   </div>
 </template>
 
@@ -88,17 +87,19 @@ const router = useRouter()
 }
 .home-actions {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 14px;
-  justify-content: center;
   margin-top: 8px;
 }
 .home-start {
-  min-width: 150px;
-  padding: 13px 34px;
+  min-width: 180px;
+  padding: 14px 40px;
   font-size: 15px;
   letter-spacing: 0.12em;
 }
 .home-settings {
-  padding: 13px 26px;
+  padding: 9px 26px;
+  font-size: 13px;
 }
 </style>

@@ -7,6 +7,7 @@ export interface ActionPayload {
   actor_id?: string | null
   target_id?: string | null
   clue_id?: string | null
+  reveal?: boolean
 }
 
 export interface PrivateChatMeta {

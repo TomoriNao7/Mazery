@@ -117,11 +117,7 @@ async def process_player_action(action: str,
 
 async def reveal_truth(game) -> Any:
     """
-    真相揭晓：注入 case_analyst，返回 CaseReveal（解析失败时返回原始文本）。
-
-    Args:
-        game: 对局对象，需暴露 found_clues、player_vote、script.truth（或
-              直接提供 summary()），支持字典形态。
+    真相揭晓：注入 case_analyst，返回 CaseReveal（LLM 失败时从剧本核心信息拼装降级版）。
     """
     sm = get_skill_manager()
     script = game.get("script") if isinstance(game, dict) else getattr(game, "script", None)
@@ -138,7 +134,43 @@ async def reveal_truth(game) -> Any:
         player_vote=_get(game, None, "player_vote", None),
         truth=truth,
     )
-    return await get_llm_client().call(prompt, schema=CaseReveal, max_tokens=3000)
+    try:
+        return await get_llm_client().call(prompt, schema=CaseReveal, max_tokens=3000)
+    except Exception as e:
+        logger.warning("真相揭晓 LLM 生成失败（已降级）: %s", e)
+        return _offline_reveal(truth, _get(game, None, "player_vote", None))
+
+
+def _offline_reveal(truth: Any, player_vote: Any = None) -> "CaseReveal":
+    """LLM 不可用时，从剧本 case_core / characters 拼装真相揭晓。"""
+    cc = (truth or {}).get("case_core") or {}
+    chars = (truth or {}).get("characters") or {}
+    murderer_id = cc.get("murderer_id")
+    mname = murderer_id
+    for c in chars.get("characters", []):
+        if isinstance(c, dict) and c.get("id") == murderer_id:
+            mname = c.get("name") or murderer_id
+            break
+    method = cc.get("murder_method") or ""
+    motive = cc.get("murder_motive") or ""
+    time_loc = f"{cc.get('murder_time', '')} · {cc.get('murder_location', '')}".strip(" ·")
+    summary = f"真凶是「{mname}」。"
+    if method:
+        summary += f"作案手法：{method}。"
+    if motive:
+        summary += f"作案动机：{motive}。"
+    if time_loc:
+        summary += f"案发：{time_loc}。"
+    correct = bool(player_vote) and player_vote == murderer_id
+    return CaseReveal(
+        verdict="player_correct" if correct else "player_wrong",
+        truth_summary=summary or "（真相揭晓生成失败，请参考剧本核心信息）",
+        clue_chain_retrospective=[],
+        missed_details=[],
+        npc_outcomes=[],
+        player_score={"total": 100 if correct else 0, "breakdown": []},
+        grade="S" if correct else "C",
+    )
 
 
 async def generate_transition(game_state,

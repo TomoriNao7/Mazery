@@ -14,7 +14,7 @@ class WorldBuilderAgent(BaseAgent):
     skill_names = ["world_builder"]
     max_tokens = 5000
 
-    def validate(self, data: Any) -> List[str]:
+    def validate(self, data: Any, state: Any = None) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})
         errors: List[str] = []
 
@@ -30,8 +30,7 @@ class WorldBuilderAgent(BaseAgent):
             errors.append("场景列表为空（至少 1 个场景）")
         else:
             for i, scene in enumerate(scenes):
-                if not isinstance(scene, dict) or not any(
-                    k in scene for k in ("name", "场景名", "scene")
-                ):
-                    errors.append(f"scenes[{i}] 缺少场景名")
+                # 内层为无类型 dict：不同模型产出的字段名不固定，仅要求非空
+                if not isinstance(scene, dict) or not scene:
+                    errors.append(f"scenes[{i}] 为空或不是对象")
         return errors

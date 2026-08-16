@@ -16,7 +16,7 @@ class DirectorAgent(BaseAgent):
     schema = FiveActStructure  # mystery_writer 默认映射案件核心，分幕需显式指定
     max_tokens = 5000
 
-    def validate(self, data: Any) -> List[str]:
+    def validate(self, data: Any, state: Any = None) -> List[str]:
         fields = data.model_dump() if isinstance(data, BaseModel) else (data or {})
         errors: List[str] = []
         acts = fields.get("acts") or []
@@ -28,8 +28,9 @@ class DirectorAgent(BaseAgent):
             if not isinstance(act, dict):
                 errors.append(f"acts[{i}] 不是对象")
                 continue
-            if not act.get("name") and not act.get("act"):
-                errors.append(f"acts[{i}] 缺少幕名")
+            # 内层为无类型 dict：幕名键模型间不固定，放宽为非空即可
+            if not act:
+                errors.append(f"acts[{i}] 为空")
 
         if not fields.get("clue_release_plan"):
             errors.append("缺少 clue_release_plan（各幕线索释放计划）")

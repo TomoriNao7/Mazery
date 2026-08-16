@@ -93,6 +93,82 @@ def _find_character(full: Dict[str, Any], cid: str) -> Dict[str, Any]:
     raise HTTPException(status_code=404, detail="角色不存在")
 
 
+def _char_name(full: Dict[str, Any], cid: Optional[str]) -> str:
+    """角色 id → 姓名（用于人物关系展示）。"""
+    if not cid:
+        return "他人"
+    for c in (full.get("characters") or {}).get("characters", []):
+        if isinstance(c, dict) and c.get("id") == cid:
+            return c.get("name") or cid
+    return cid
+
+
+_PREFERRED_TEXT_KEYS = ("description", "deep", "detail", "text",
+                        "content", "summary", "goal", "note")
+
+
+def _plain_text(v: Any) -> str:
+    """把任意结构（dict/list/str）转成纯文字，剔除 type/surface 等字段名。"""
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, bool):
+        return ""
+    if isinstance(v, (int, float)):
+        return str(v)
+    if isinstance(v, list):
+        return "；".join(x for x in (_plain_text(i) for i in v) if x)
+    if isinstance(v, dict):
+        for k in _PREFERRED_TEXT_KEYS:
+            if k in v:
+                t = _plain_text(v[k])
+                if t:
+                    return t
+        return "；".join(t for t in (_plain_text(x) for x in v.values()) if t)
+    return str(v)
+
+
+def _resolve_relationships(full: Dict[str, Any], c: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """人物关系：把 target 角色 id 解析为姓名，兼容 detail/description 键。"""
+    rels: List[Dict[str, Any]] = []
+    for r in c.get("relationships") or []:
+        if not isinstance(r, dict):
+            continue
+        target = r.get("target") or r.get("npc_id")
+        name = r.get("name")
+        if not name or (target and not _is_name_like(name)):
+            name = _char_name(full, target)
+        rels.append({
+            "name": name or _char_name(full, target) or "他人",
+            "relation": _plain_text(r.get("relation") or r.get("type")),
+            "description": _plain_text(r.get("detail") or r.get("description")),
+        })
+    return rels
+
+
+def _is_name_like(name: Any) -> bool:
+    """粗略判断某字段是否为真实姓名（而非 char_xxx 占位）。"""
+    return bool(name) and not (isinstance(name, str) and name.startswith("char_"))
+
+
+def _all_clues(full: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """剧本内全部线索（关键/误导/中性）。"""
+    clues = full.get("clues") or {}
+    return (clues.get("key_clues") or []) + \
+           (clues.get("misleading_clues") or []) + \
+           (clues.get("neutral_clues") or [])
+
+
+def _secret_text(s: Any) -> str:
+    """角色秘密：surface（表面人设）+ deep（深藏秘密）都属该角色自身信息。"""
+    if isinstance(s, dict):
+        parts = [p for p in (_plain_text(s.get("surface")),
+                             _plain_text(s.get("deep"))) if p]
+        return "；".join(parts) if parts else ""
+    return _plain_text(s)
+
+
 # ---------- 剧本库 ----------
 
 @router.get("/scripts/local", summary="本地剧本库列表")
@@ -172,15 +248,41 @@ async def script_character_detail(script_id: str, cid: str,
     script = await ScriptRepo(session).get(script_id, load_relation=False)
     if not script:
         raise HTTPException(status_code=404, detail="剧本不存在")
-    c = _find_character(_parse_full(script), cid)
+    full = _parse_full(script)
+    c = _find_character(full, cid)
     public = c.get("public") or {}
+    case_core = full.get("case_core") or {}
+    is_murderer = (case_core.get("murderer_id") == c.get("id"))
+    own_clues = [{
+        "id": clue.get("id"),
+        "name": clue.get("name"),
+        "description": _plain_text(clue.get("description")),
+        "location": _plain_text(clue.get("location")),
+    } for clue in _all_clues(full)
+        if isinstance(clue, dict) and clue.get("points_to") == c.get("id")]
+    murderer_notice = ""
+    if is_murderer:
+        method = _plain_text(case_core.get("murder_method"))
+        motive = _plain_text(case_core.get("murder_motive"))
+        murderer_notice = "你是本案的真凶。"
+        if method:
+            murderer_notice += f"案发过程：{method}。"
+        if motive:
+            murderer_notice += f"你的动机：{motive}。"
+        murderer_notice += "请隐藏身份、谨慎发言，把怀疑引向他人，坚持到游戏结束。"
     return {
         "id": c.get("id"),
         "name": c.get("name"),
         "identity": _pub(public, "identity", "身份", "职业"),
         "background": _pub(public, "background", "公开背景", "背景"),
         "appearance": _pub(public, "appearance", "外貌", "外貌特征"),
-        "relationships": c.get("relationships") or [],
-        "goal": c.get("motive") or c.get("goal"),
-        "secrets": c.get("secrets") or [],
+        "personality": _pub(public, "personality", "性格", "公开性格"),
+        "relationships": _resolve_relationships(full, c),
+        "goal": _plain_text(c.get("motive") or c.get("goal")),
+        "secrets": [t for t in (_secret_text(s) for s in (c.get("secrets") or [])) if t],
+        "speaking_style": _plain_text(c.get("speaking_style")),
+        "knowledge_boundary": [str(x) for x in (c.get("knowledge_boundary") or [])],
+        "is_murderer": is_murderer,
+        "murderer_notice": murderer_notice,
+        "own_clues": own_clues,
     }

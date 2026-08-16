@@ -41,9 +41,15 @@ export interface CharL2 {
   identity?: string
   background?: string
   appearance?: string
+  personality?: string
   relationships: Relationship[]
-  goal?: unknown
-  secrets: unknown[]
+  goal?: string
+  secrets: string[]
+  speaking_style?: string
+  knowledge_boundary?: string[]
+  is_murderer?: boolean
+  murderer_notice?: string
+  own_clues?: Clue[]
 }
 
 export interface Clue {
@@ -60,6 +66,12 @@ export interface CharCard {
   clues: Clue[]
 }
 
+export interface PublicClueItem {
+  id: string
+  name: string
+  location?: string
+}
+
 export interface GameMessage {
   id?: number
   act?: number
@@ -68,6 +80,8 @@ export interface GameMessage {
   content: string
   action_type?: string
   created_at?: string
+  /** 运行时串场发言序号（仅前端播放用，非后端字段） */
+  __sid?: number
 }
 
 export interface GameState {
@@ -84,6 +98,12 @@ export interface GameState {
   allowed_actions: string[]
   private_sessions: Record<string, { target: string; count: number; closed: boolean }>
   votes: Record<string, string>
+  discussion?: {
+    active: boolean
+    round: number
+    max_rounds: number
+    pending?: { asker?: string; question?: string } | null
+  }
 }
 
 export interface DrawCards {
@@ -102,6 +122,14 @@ export interface PrivateSendResult {
   transition?: Transition | null
 }
 
+export interface NpcSpeech {
+  role: string
+  speaker_name: string
+  content: string
+  action_type?: string
+  reveal_clue_id?: string
+}
+
 export interface Transition {
   advanced: boolean
   from_act?: number
@@ -111,7 +139,25 @@ export interface Transition {
   message?: string
   narration?: string
   notifications?: string[]
+  npc_speeches?: NpcSpeech[]
   act?: number
+  discussion_active?: boolean
+  discussion_max_rounds?: number
+}
+
+export interface DiscussionPlayerTurn {
+  kind: 'answer' | 'question'
+  asker?: string
+  question?: string
+}
+
+export interface DiscussionBatch {
+  done: boolean
+  npc_messages: NpcSpeech[]
+  player_turn: DiscussionPlayerTurn | null
+  round: number
+  max_rounds: number
+  transition?: Transition | null
 }
 
 export interface VoteResult {
@@ -193,7 +239,7 @@ export const api = {
     (await http.get(`/api/game/${gameId}/messages`)).data,
   getGameClues: async (gameId: string): Promise<Clue[]> =>
     (await http.get(`/api/game/${gameId}/clues`)).data,
-  getCharacterCards: async (gameId: string): Promise<{ cards: CharCard[] }> =>
+  getCharacterCards: async (gameId: string): Promise<{ cards: CharCard[]; public_clues: PublicClueItem[] }> =>
     (await http.get(`/api/game/${gameId}/character-cards`)).data,
 
   getDraw: async (gameId: string): Promise<DrawCards> =>
@@ -205,6 +251,39 @@ export const api = {
     (await http.get(`/api/game/${gameId}/private-chat/${npcId}`)).data,
   endPrivate: async (gameId: string, npcId: string) =>
     (await http.post(`/api/game/${gameId}/private-chat/${npcId}/end`)).data,
+
+  /** 公开一条线索（对应 NPC 发言播放完毕后调用，幂等）。 */
+  publicizeClue: async (gameId: string, clueId: string) =>
+    (await http.post(`/api/game/${gameId}/clue/${clueId}/public`)).data,
+  /** 交换阶段重载时，把已如实发言的线索补标记为公开。 */
+  reconcileExchange: async (gameId: string) =>
+    (await http.post(`/api/game/${gameId}/exchange/reconcile`)).data,
+
+  /** 轮次制讨论：推进到下一步（取回一批 NPC 发言 + 玩家待办）。 */
+  discussionNext: async (gameId: string): Promise<DiscussionBatch> =>
+    (await http.post(`/api/game/${gameId}/discussion/next`, {})).data,
+  /** 讨论：玩家回答某 NPC 的问题。 */
+  discussionAnswer: async (gameId: string, content: string): Promise<DiscussionBatch> =>
+    (await http.post(`/api/game/${gameId}/discussion/answer`, { content })).data,
+  /** 讨论：玩家在自己轮次提问或发言（可选公开自己的线索）。 */
+  discussionAction: async (
+    gameId: string,
+    content: string,
+    targetId?: string,
+    clueId?: string,
+    reveal?: boolean,
+  ): Promise<DiscussionBatch> =>
+    (
+      await http.post(`/api/game/${gameId}/discussion/action`, {
+        content,
+        target_id: targetId ?? null,
+        clue_id: clueId ?? null,
+        reveal: !!reveal,
+      })
+    ).data,
+  /** 讨论：玩家跳过本轮提问。 */
+  discussionPass: async (gameId: string): Promise<DiscussionBatch> =>
+    (await http.post(`/api/game/${gameId}/discussion/pass`, {})).data,
 
   advance: async (gameId: string): Promise<Transition> =>
     (await http.post(`/api/game/${gameId}/advance`)).data,

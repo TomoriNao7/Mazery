@@ -47,7 +47,8 @@ class CharacterCard(BaseModel):
     motive: Optional[Dict[str, Any]] = Field(default=None, description="L4 动机层")
     truth: Optional[Dict[str, Any]] = Field(default=None, description="L5 核心真相层")
     speaking_style: Dict[str, Any] = Field(description="声音指纹：词汇/句式/语气/标点")
-    knowledge_boundary: List[str] = Field(description="该 NPC 知道/不知道的信息边界")
+    knowledge_boundary: List[str] = Field(description="该 NPC 知道的信息边界（只列知道的内容，不写‘不知道…’）")
+    is_accomplice: Optional[bool] = Field(default=False, description="是否为帮凶（已知真凶身份并协助作案）")
 
 
 class CharacterSet(BaseModel):
@@ -150,6 +151,21 @@ class NpcVoteBatch(BaseModel):
     """NPC 投票批量输出（依据各自怀疑与已知信息，可能被误导）。"""
 
     votes: List[NpcVote]
+
+
+class NpcDiscussionTurn(BaseModel):
+    """NPC 在讨论轮次中的一次发言：提问或陈述。"""
+
+    kind: str = Field(description="question（提问）或 statement（陈述/公开）")
+    target: Optional[str] = Field(default=None, description="提问对象（participant id；statement 时为空）")
+    content: str = Field(description="发言内容（问题或陈述，可含对上一轮回答的追加追问）")
+
+
+class NpcDiscussionReply(BaseModel):
+    """被问 NPC 对讨论问题的回应。"""
+
+    content: str
+    is_lying: bool = Field(default=False, description="主持人视角：是否为谎言")
 
 
 # ==================== 审查与揭晓 ====================
