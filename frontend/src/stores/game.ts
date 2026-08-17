@@ -168,6 +168,10 @@ export const useGameStore = defineStore('game', {
     async discussionAnswer(content: string) {
       if (this.discussion.busy) return
       this.discussion.busy = true
+      // 乐观展示玩家回答
+      this.messages.push({
+        role: 'player', speaker_name: this.playerCharId, content, action_type: 'dialogue',
+      })
       try {
         const res = await api.discussionAnswer(this.gameId, content)
         this._applyDiscussion(res)
@@ -180,6 +184,10 @@ export const useGameStore = defineStore('game', {
     async discussionAction(content: string, target?: string, clueId?: string, reveal?: boolean) {
       if (this.discussion.busy) return
       this.discussion.busy = true
+      // 乐观展示玩家发言
+      this.messages.push({
+        role: 'player', speaker_name: this.playerCharId, content, action_type: 'dialogue',
+      })
       try {
         const res = await api.discussionAction(this.gameId, content, target, clueId, reveal)
         this._applyDiscussion(res)
@@ -192,6 +200,11 @@ export const useGameStore = defineStore('game', {
     async discussionPass() {
       if (this.discussion.busy) return
       this.discussion.busy = true
+      // 乐观展示跳过提示（系统消息）
+      this.messages.push({
+        role: 'system', speaker_name: 'GM', content: '（你选择跳过本轮发言。）',
+        action_type: 'narration',
+      })
       try {
         const res = await api.discussionPass(this.gameId)
         this._applyDiscussion(res)

@@ -11,6 +11,7 @@ GameState / Game 目前尚未实现（backend/app/models 仍为占位），因�
 """
 
 from dataclasses import dataclass, field
+import json
 import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -105,14 +106,59 @@ async def process_player_action(action: str,
         round_number=act_summary.get("round_in_act")
         or _get(game_state, None, "round_in_act", 1),
     )
-    # 主持是流式自然语言，不是结构化输出：明确要求输出旁白/台词文本，不要 JSON
+    # 主持是流式自然语言，不是结构化输出：GM 只做场景/背景/氛围旁白，不替 NPC 说话
     prompt += (
-        "\n\n请直接输出主持人的旁白与相关 NPC 的台词（自然中文叙述），"
+        "\n\n请只输出主持人的场景/背景/氛围旁白（自然中文叙述，3-5 句，不超过 150 字）。"
+        "绝不要替任何 NPC 说话、绝不要输出任何 NPC 的台词或对话、不要用引号引用 NPC 的话"
+        "（NPC 的发言由各自的发言气泡承担）。"
         "不要输出 JSON、不要输出字段名、不要输出 schema、不要加代码块。"
-        "如果是你的回合，直接说话即可。"
     )
     async for chunk in get_llm_client().stream(prompt, max_tokens=2000):
         yield chunk
+
+
+async def generate_opening_background(full: Dict[str, Any],
+                                     title: str,
+                                     scene: str,
+                                     llm=None) -> str:
+    """生成游戏开场背景旁白（GM 只叙事，不替 NPC 说话）。失败时用剧本信息拼兜底。"""
+    from backend.app.core.skill_manager import get_skill_manager
+    sm = get_skill_manager()
+    ws = full.get("world_setting") or {}
+    outline = full.get("outline") or ""
+    llm = llm or get_llm_client()
+    prompt = sm.build_system_prompt(
+        ["game_master"],
+        opening=True,
+        title=title,
+        scene=scene or "",
+        world_setting=ws,
+        outline=outline,
+    )
+    prompt += (
+        "\n\n请只输出一段游戏开场背景旁白（自然中文，4-6 句，约 120-180 字），介绍案发前的场景、"
+        "氛围与当晚将要发生的事。绝不要替任何 NPC 说话、绝不要出现任何 NPC 的台词或对话、"
+        "不要用引号引用 NPC 的话。不要输出 JSON。"
+    )
+    try:
+        text = await llm.call(prompt, max_tokens=400)
+        if text and str(text).strip():
+            return str(text).strip()[:300]
+    except Exception as e:
+        logger.warning("开场背景生成失败（使用模板）: %s", e)
+    parts = []
+    if isinstance(ws, dict):
+        for v in ws.values():
+            if isinstance(v, str) and v.strip():
+                parts.append(v.strip())
+            elif isinstance(v, dict):
+                for vv in v.values():
+                    if isinstance(vv, str) and vv.strip():
+                        parts.append(vv.strip())
+    if outline:
+        parts.append(outline)
+    text = "；".join(parts)[:300]
+    return text or f"—— {title} · 开场 ——"
 
 
 async def reveal_truth(game) -> Any:
@@ -197,11 +243,26 @@ async def generate_transition(game_state,
         game_state=game_state,
         npc_contexts=npc_simulator.context_cards() if npc_simulator is not None else {},
     )
+    prompt += (
+        "\n\n请只输出一段纯文字的场景/转场旁白（自然中文，3-5 句，不超过 150 字）。"
+        "绝不要替任何 NPC 说话、绝不要输出 NPC 台词、不要用引号引用 NPC 的话。"
+        "不要输出 JSON、不要输出字段名。"
+    )
     narration = f"—— 第{act}幕 · {stage_label or ''} ——"
     try:
         text = await get_llm_client().call(prompt, max_tokens=600)
         if text and str(text).strip():
-            narration = str(text).strip()
+            text = str(text).strip()
+            # 防御：若模型仍返回 JSON，提取其中文案
+            if text.startswith("{"):
+                try:
+                    obj = json.loads(text)
+                    inner = obj.get("content") or obj.get("narration") or ""
+                    if isinstance(inner, str) and inner.strip():
+                        text = inner.strip()
+                except json.JSONDecodeError:
+                    pass
+            narration = text
     except Exception as e:
         logger.warning("转场旁白生成失败，使用模板: %s", e)
 

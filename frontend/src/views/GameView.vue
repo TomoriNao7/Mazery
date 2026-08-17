@@ -405,19 +405,11 @@ function leave() {
                 </div>
               </div>
             </template>
-            <div v-if="game.typing" class="chat-row theirs">
-              <div class="thr-avatar">✦</div>
-              <div class="thr-col">
-                <div class="thr-name dim">主持人</div>
-                <div class="bubble theirs-bubble gm-typing">
-                  <template v-if="game.partial">
-                    {{ game.partial }}<span class="cursor">▍</span>
-                  </template>
-                  <template v-else>
-                    <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
-                  </template>
-                </div>
-              </div>
+            <!-- GM 生成中：居中等待提示（非气泡），完成后整段淡入 -->
+            <div v-if="game.typing" class="gm-waiting">
+              <span class="gm-line" />
+              <span class="gm-wait-text">主持人…</span>
+              <span class="gm-line" />
             </div>
           </TransitionGroup>
         </div>
@@ -865,13 +857,31 @@ function leave() {
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
 }
-.gm-typing {
-  color: var(--text-2);
-  font-style: italic;
-}
 .cursor {
   color: var(--accent);
   animation: pulse 1s ease-in-out infinite;
+}
+/* GM 生成中的居中等待提示 */
+.gm-waiting {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0;
+}
+.gm-wait-text {
+  font-size: 12px;
+  color: var(--text-3);
+  letter-spacing: 0.2em;
+  animation: gmWaitPulse 1.6s ease-in-out infinite;
+}
+@keyframes gmWaitPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 /* GM 旁白/自发言统一淡入 */
 .gm-text {

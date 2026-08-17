@@ -356,7 +356,8 @@ class NpcSimulator:
                 private_chat=True,
             )
             prompt += (
-                "\n\n请直接输出该 NPC 的回复（自然中文，第一人称，约 2-4 句），"
+                "\n\n请直接输出该 NPC 的回复（自然中文，第一人称，约 2-4 句，不加引号；"
+                "动作/表情用（）放在句后），"
                 "不要输出 JSON、不要输出字段名、不要加代码块。"
             )
             text = ""
@@ -503,6 +504,7 @@ class NpcSimulator:
         prompt += (
             "\n\n请直接用该 NPC 的第一人称输出这段发言（自然中文，约 2-4 句、不超过 100 字）。"
             "不要输出 JSON、不要输出字段名、不要加代码块。"
+            "发言内容不要加引号；如有动作/表情，用（）放在对应句子后面。"
         )
         return prompt
 
@@ -646,10 +648,22 @@ def _clue_by_id(full: Any, clue_id: str) -> Dict[str, Any]:
 
 
 async def _collect_text(llm, prompt: str, max_tokens: int = 240) -> str:
-    """非流式取一次完整 LLM 输出；失败返回空串（由调用方用模板兜底）。"""
+    """非流式取一次完整 LLM 输出；失败返回空串（由调用方用模板兜底）。
+
+    若模型按 skill 的 output_format 输出了 JSON，提取其中 content 字段。
+    """
     try:
         text = await llm.call(prompt, max_tokens=max_tokens)
-        return (text or "").strip()
+        text = (text or "").strip()
+        if text.startswith("{"):
+            try:
+                obj = json.loads(text)
+                inner = obj.get("content") or obj.get("response") or ""
+                if isinstance(inner, str) and inner.strip():
+                    text = inner.strip()
+            except json.JSONDecodeError:
+                pass
+        return text
     except Exception as e:
         logger.warning("阶段自发言 LLM 生成失败（将用模板兜底）: %s", e)
         return ""
