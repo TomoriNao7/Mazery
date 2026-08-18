@@ -34,6 +34,7 @@ const notifyShow = ref(false)
 const revealClue = ref(false)
 const showMyClue = ref(false)
 const myClueDetail = ref<Clue | null>(null)
+const showLeaveConfirm = ref(false)
 
 const input = ref('')
 const selectedTarget = ref('')
@@ -302,6 +303,10 @@ async function onRevealExit() {
 }
 
 function leave() {
+  showLeaveConfirm.value = true
+}
+function confirmLeave() {
+  showLeaveConfirm.value = false
   router.push('/library')
 }
 </script>
@@ -539,6 +544,14 @@ function leave() {
         <button class="btn btn-primary mc-btn" @click="showMyClue = false">关闭</button>
       </div>
     </AppModal>
+    <AppModal :show="showLeaveConfirm" width="380px" @close="showLeaveConfirm = false">
+      <div class="leave-confirm-head display gold">返回剧本库</div>
+      <p class="leave-confirm-text">当前对局尚未结束，返回剧本库后将退出本局游戏。确定返回吗？</p>
+      <div class="leave-confirm-actions">
+        <button class="btn btn-ghost" @click="showLeaveConfirm = false">取消</button>
+        <button class="btn btn-primary" @click="confirmLeave">确认返回</button>
+      </div>
+    </AppModal>
   </div>
 </template>
 
@@ -771,6 +784,22 @@ function leave() {
 .mc-btn {
   margin-top: 22px;
   width: 100%;
+}
+.leave-confirm-head {
+  font-size: 19px;
+  margin-bottom: 12px;
+}
+.leave-confirm-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+}
+.leave-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 26px;
 }
 /* 聊天 */
 .game-main {

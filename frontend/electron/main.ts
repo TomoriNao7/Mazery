@@ -42,7 +42,7 @@ function createWindow() {
       symbolColor: '#ecebe4',
       height: 36,
     },
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    icon: path.join(process.env.VITE_PUBLIC, 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },
