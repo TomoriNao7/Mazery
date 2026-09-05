@@ -45,8 +45,28 @@ const STAGES = [
 ]
 
 let timer: ReturnType<typeof setInterval> | null = null
+const startedAt = ref(0)
+const clock = ref(0)
 
 const currentStage = computed(() => STAGES[Math.min(stageIdx.value, STAGES.length - 1)])
+
+/** 已用秒数（由 clock 每秒驱动刷新） */
+const elapsedSec = computed(() => {
+  if (startedAt.value <= 0) return 0
+  return Math.floor((clock.value - startedAt.value) / 1000)
+})
+/** 预计剩余秒数：按已用耗时与实际进度推算（进度条为模拟，该值为估算） */
+const remainingSec = computed(() => {
+  if (progress.value <= 0) return null
+  const p = Math.min(progress.value, 100)
+  return Math.floor((elapsedSec.value * (100 - p)) / p)
+})
+
+function fmt(sec: number): string {
+  const s = Math.max(0, Math.floor(sec))
+  const m = Math.floor(s / 60)
+  return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+}
 
 function validate(): boolean {
   const e: Record<string, string> = {}
@@ -60,7 +80,10 @@ function validate(): boolean {
 function startProgress() {
   progress.value = 0
   stageIdx.value = 0
+  startedAt.value = Date.now()
+  clock.value = 0
   timer = setInterval(() => {
+    clock.value = Date.now()
     if (progress.value >= 95) return
     progress.value = Math.min(95, progress.value + 1.5 + Math.random() * 1.5)
     stageIdx.value = Math.min(STAGES.length - 1, Math.floor((progress.value / 100) * STAGES.length))
@@ -206,6 +229,14 @@ onBeforeUnmount(stopProgress)
             <div class="gen-bar" :style="{ width: progress + '%' }" />
           </div>
           <div class="gen-stage dim">{{ currentStage }}</div>
+          <div class="gen-eta dim" v-if="elapsedSec > 0">
+            <template v-if="remainingSec !== null">
+              已用 {{ fmt(elapsedSec) }} · 预计还需约 {{ fmt(remainingSec) }}
+            </template>
+            <template v-else>
+              已用 {{ fmt(elapsedSec) }}
+            </template>
+          </div>
         </template>
 
         <div v-if="resultId && !genError" class="gen-actions">
@@ -323,6 +354,12 @@ onBeforeUnmount(stopProgress)
   font-size: 13px;
   letter-spacing: 0.08em;
   min-height: 20px;
+}
+.gen-eta {
+  font-size: 12px;
+  margin-top: 6px;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
 }
 .gen-done {
   padding: 26px 0 6px;

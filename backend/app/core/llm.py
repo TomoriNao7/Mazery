@@ -25,7 +25,7 @@ def _default_timeout() -> httpx.Timeout:
     读超时需覆盖剧本生成这类大 JSON 输出：思考型模型（如 qwen3-max 系列）
     首 token 前可能思考数分钟，90s 会误判超时，故放宽到 600s。
     """
-    return httpx.Timeout(connect=5.0, read=600.0, write=600.0, pool=10.0)
+    return httpx.Timeout(connect=5.0, read=1800.0, write=1800.0, pool=10.0)
 
 
 def _extract_json(text: str) -> str:
