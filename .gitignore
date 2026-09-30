@@ -2,6 +2,7 @@
 /test_main.http
 /doc
 /backend/tests
+/log
 
 # IDE
 .idea/

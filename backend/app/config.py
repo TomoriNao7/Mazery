@@ -29,6 +29,16 @@ def ensure_db_dir() -> Path:
     return DB_DIR
 
 
+# ---------- 日志目录 ----------
+# 默认放在项目根目录的 log/ 下，可用环境变量 MAZERY_LOG_DIR 覆盖
+LOG_DIR = Path(os.environ.get("MAZERY_LOG_DIR") or (Path(__file__).resolve().parent.parent.parent / "log"))
+
+
+def ensure_log_dir() -> Path:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    return LOG_DIR
+
+
 # SQLite 连接字符串（支持相对路径和绝对路径）
 DATABASE_URL = f"sqlite+aiosqlite:///{(DB_DIR / 'mazery.db').as_posix()}"
 

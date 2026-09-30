@@ -1,8 +1,8 @@
 #LLM客户端（统一封装 AsyncOpenAI）
-"""LLM 客户端：统一封装 AsyncOpenAI，提供结构化输出（schema）与流式输出。
+"""
+LLM 客户端：统一封装 AsyncOpenAI，提供结构化输出（schema）与流式输出。
 
-与 TRD 7.6 注入点伪代码中的 `llm.call(prompt, schema=...)` / `llm.stream(prompt)`
-对应。所有 Agent 注入点通过 get_llm_client() 获取同一客户端。
+所有 Agent 注入点通过 get_llm_client() 获取同一客户端。
 """
 
 import json
