@@ -34,6 +34,7 @@ const notifyShow = ref(false)
 const revealClue = ref(false)
 const showMyClue = ref(false)
 const myClueDetail = ref<Clue | null>(null)
+const showLeaveConfirm = ref(false)
 
 const input = ref('')
 const selectedTarget = ref('')
@@ -302,6 +303,10 @@ async function onRevealExit() {
 }
 
 function leave() {
+  showLeaveConfirm.value = true
+}
+function confirmLeave() {
+  showLeaveConfirm.value = false
   router.push('/library')
 }
 </script>
@@ -405,19 +410,11 @@ function leave() {
                 </div>
               </div>
             </template>
-            <div v-if="game.typing" class="chat-row theirs">
-              <div class="thr-avatar">✦</div>
-              <div class="thr-col">
-                <div class="thr-name dim">主持人</div>
-                <div class="bubble theirs-bubble gm-typing">
-                  <template v-if="game.partial">
-                    {{ game.partial }}<span class="cursor">▍</span>
-                  </template>
-                  <template v-else>
-                    <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
-                  </template>
-                </div>
-              </div>
+            <!-- GM 生成中：居中等待提示（非气泡），完成后整段淡入 -->
+            <div v-if="game.typing" class="gm-waiting">
+              <span class="gm-line" />
+              <span class="gm-wait-text">主持人…</span>
+              <span class="gm-line" />
             </div>
           </TransitionGroup>
         </div>
@@ -545,6 +542,14 @@ function leave() {
         <p class="mc-desc">{{ myClueDetail.description }}</p>
         <div v-if="myClueDetail.location" class="mc-loc dim">来源地点：{{ myClueDetail.location }}</div>
         <button class="btn btn-primary mc-btn" @click="showMyClue = false">关闭</button>
+      </div>
+    </AppModal>
+    <AppModal :show="showLeaveConfirm" width="380px" @close="showLeaveConfirm = false">
+      <div class="leave-confirm-head display gold">返回剧本库</div>
+      <p class="leave-confirm-text">当前对局尚未结束，返回剧本库后将退出本局游戏。确定返回吗？</p>
+      <div class="leave-confirm-actions">
+        <button class="btn btn-ghost" @click="showLeaveConfirm = false">取消</button>
+        <button class="btn btn-primary" @click="confirmLeave">确认返回</button>
       </div>
     </AppModal>
   </div>
@@ -780,6 +785,22 @@ function leave() {
   margin-top: 22px;
   width: 100%;
 }
+.leave-confirm-head {
+  font-size: 19px;
+  margin-bottom: 12px;
+}
+.leave-confirm-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+}
+.leave-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 26px;
+}
 /* 聊天 */
 .game-main {
   flex: 1;
@@ -865,13 +886,31 @@ function leave() {
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
 }
-.gm-typing {
-  color: var(--text-2);
-  font-style: italic;
-}
 .cursor {
   color: var(--accent);
   animation: pulse 1s ease-in-out infinite;
+}
+/* GM 生成中的居中等待提示 */
+.gm-waiting {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0;
+}
+.gm-wait-text {
+  font-size: 12px;
+  color: var(--text-3);
+  letter-spacing: 0.2em;
+  animation: gmWaitPulse 1.6s ease-in-out infinite;
+}
+@keyframes gmWaitPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 /* GM 旁白/自发言统一淡入 */
 .gm-text {

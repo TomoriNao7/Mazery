@@ -217,13 +217,17 @@ async function start() {
   flex-direction: column;
 }
 .page-head {
+  position: relative;
   padding: 22px 24px 0;
   margin-bottom: 8px;
   text-align: center;
 }
 .page-head .back-btn {
-  display: block;
-  margin: 0 auto 10px;
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
 }
 .page-head p {
   margin: 8px 0 0;

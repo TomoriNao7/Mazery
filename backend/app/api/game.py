@@ -17,6 +17,7 @@
     GET  /api/game/list                    对局列表
 """
 
+import asyncio
 import json
 import logging
 import random
@@ -28,7 +29,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.game_master import (
-    process_player_action, reveal_truth, generate_transition,
+    process_player_action, reveal_truth, generate_transition, generate_opening_background,
 )
 from backend.app.core.game_state_machine import (
     ActionType, ActStateMachine, PRIVATE_CHAT_MAX_MESSAGES,
@@ -407,10 +408,27 @@ async def start_game(req: StartGameRequest,
         "act": 1, "role": "system", "speaker_name": "GM",
         "content": f"剧本《{script.title}》开始，第 1 幕（介绍）。", "action_type": "system",
     })
-    # 第 1 幕：NPC 依次自我介绍（LLM-first，失败用确定性模板），最后 GM 提示轮到玩家
+    # 开场：GM 先介绍前置背景（只叙事），再进入各 NPC 自我介绍。
+    # 背景与自我介绍并行生成（各自失败各自兜底），减少串行 LLM 等待。
     intro_sim = NpcSimulator(states)
-    intro_speeches = await intro_sim.generate_stage_speeches(
-        "intro_r1", full, req.player_char_id, get_llm_client())
+
+    async def _gen_background() -> str:
+        try:
+            return await generate_opening_background(
+                full, script.title, full.get("scene") or script.scene, get_llm_client())
+        except Exception:
+            return full.get("outline") or f"—— {script.title} · 开场 ——"
+
+    async def _gen_intros():
+        return await intro_sim.generate_stage_speeches(
+            "intro_r1", full, req.player_char_id, get_llm_client())
+
+    background, intro_speeches = await asyncio.gather(_gen_background(), _gen_intros())
+
+    await GameRepo(session).add_message(game.id, {
+        "act": 1, "role": "system", "speaker_name": "GM",
+        "content": background, "action_type": "narration",
+    })
     for sp in intro_speeches:
         await GameRepo(session).add_message(game.id, {
             "act": 1, "role": sp["role"], "speaker_name": sp["speaker_name"],

@@ -61,7 +61,7 @@ class BaseAgent:
     output_key: str = "output"
     skill_names: List[str] = []
     schema: Optional[Type[BaseModel]] = None
-    max_retries: int = 3
+    max_retries: int = 5
     # 生成阶段的输出长度上限（结构化 JSON，无需 16k 默认值；限制可显著缩短生成时间）
     max_tokens: int = 8000
 

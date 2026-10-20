@@ -151,7 +151,7 @@ class DiscussionEngine:
             "请输出该 NPC 本轮在讨论中的一次发言（结构化 JSON，字段：kind/target/content）：\n"
             "- kind: question（提问）或 statement（陈述/公开线索）\n"
             "- target: 提问对象 participant id（statement 时留空）\n"
-            "- content: 发言内容（第一人称，2-4 句）\n"
+            "- content: 发言内容（第一人称，2-4 句，不加引号；动作/表情用（）放在句后）\n"
             "规则：\n"
             "1. 优先根据场上已公开线索提问——线索指向谁就问谁；也可凭自己的推理问自己想知道的事。\n"
             "2. 绝不能用自己撒谎/编造过的内容去问别人。\n"
@@ -188,6 +188,7 @@ class DiscussionEngine:
         prompt += (
             "\n\n请输出该 NPC 对被问问题的回应（第一人称，2-4 句，结构化 JSON：content/is_lying）。\n"
             "可按其目的如实回答或撒谎；但绝不能说出自己不该知道的秘密；凶手绝不承认自己是凶手。"
+            "发言内容不要加引号；如有动作/表情，用（）放在对应句子后面。"
         )
         try:
             result = await llm.call(prompt, schema=NpcDiscussionReply, max_tokens=200)

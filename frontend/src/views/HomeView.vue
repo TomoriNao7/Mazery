@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import TutorialModal from '../components/TutorialModal.vue'
 
 const router = useRouter()
+const tutorialShow = ref(false)
 </script>
 
 <template>
@@ -17,8 +20,11 @@ const router = useRouter()
         <button class="btn btn-primary home-start glow-hover" @click="router.push('/library')">
           开始游戏
         </button>
+        <button class="btn btn-ghost home-settings" @click="tutorialShow = true">教程</button>
         <button class="btn btn-ghost home-settings" @click="router.push('/settings')">设置</button>
-      </div>    </div>
+      </div>
+    </div>
+    <TutorialModal :show="tutorialShow" @close="tutorialShow = false" />
   </div>
 </template>
 
